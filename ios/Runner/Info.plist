@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>App su dung camera de quet hoa don va trich xuat nguyen lieu.</string>
 </dict>
 </plist>
