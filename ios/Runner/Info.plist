@@ -46,6 +46,6 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>App su dung camera de quet hoa don va trich xuat nguyen lieu.</string>
+	<string>Ứng dụng sử dụng camera để quét hóa đơn và trích xuất nguyên liệu.</string>
 </dict>
 </plist>

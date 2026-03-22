@@ -25,7 +25,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Quet hoa don')),
+      appBar: AppBar(title: const Text('Quét hóa đơn')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -33,7 +33,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
           const SizedBox(height: 14),
           if (_isScanning)
             const Card(
-              child: LoadingIndicator(message: 'Dang xu ly OCR va barcode...'),
+              child: LoadingIndicator(message: 'Đang xử lý OCR và barcode...'),
             ),
           if (_error != null) ...[
             Card(
@@ -65,14 +65,14 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             CustomButton(
-              label: _isScanning ? 'Dang quet...' : 'Chup anh hoa don',
+              label: _isScanning ? 'Đang quét...' : 'Chụp ảnh hóa đơn',
               icon: Icons.camera_alt_outlined,
               isLoading: _isScanning,
               onPressed: _isScanning ? null : _scanReceipt,
             ),
             const SizedBox(height: 8),
             CustomButton(
-              label: 'Day nguyen lieu vao kho',
+              label: 'Đẩy nguyên liệu vào kho',
               icon: Icons.inventory_2_outlined,
               type: CustomButtonType.secondary,
               onPressed: (_result == null || _result!.ingredients.isEmpty)
@@ -93,14 +93,14 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Quet OCR + Barcode',
+              'Quét OCR + Barcode',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'Buoc 1: Chup anh hoa don\n'
-              'Buoc 2: Trich xuat text va barcode\n'
-              'Buoc 3: Chon day du lieu sang module Kho',
+              'Bước 1: Chụp ảnh hóa đơn\n'
+              'Bước 2: Trích xuất text và barcode\n'
+              'Bước 3: Chọn đẩy dữ liệu sang module Kho',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -136,12 +136,12 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Nguyen lieu goi y',
+              'Nguyên liệu gợi ý',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
             ),
             const SizedBox(height: 10),
             if (ingredients.isEmpty)
-              const Text('Khong tim thay nguyen lieu ro rang tu hoa don.')
+              const Text('Không tìm thấy nguyên liệu rõ ràng từ hóa đơn.')
             else
               Wrap(
                 spacing: 8,
@@ -170,12 +170,12 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Barcode tim thay',
+              'Barcode tìm thấy',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
             ),
             const SizedBox(height: 10),
             if (barcodes.isEmpty)
-              const Text('Chua phat hien barcode.')
+              const Text('Chưa phát hiện barcode.')
             else
               ...barcodes.map(
                 (code) => Padding(
@@ -230,7 +230,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
         return;
       }
       setState(() {
-        _error = 'Khong the quet hoa don: $e';
+        _error = 'Không thể quét hóa đơn: $e';
       });
     } finally {
       if (mounted) {
@@ -258,7 +258,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Da day ${ingredients.length} nguyen lieu sang module kho.',
+          'Đã đẩy ${ingredients.length} nguyên liệu sang module kho.',
         ),
       ),
     );

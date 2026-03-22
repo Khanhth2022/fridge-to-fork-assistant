@@ -20,7 +20,7 @@ class BepTroLyApp extends StatelessWidget {
         // Team members 1,2,3,4 can register their providers here.
       ],
       child: MaterialApp(
-        title: 'Bep Tro Ly',
+        title: 'Bếp Trợ Lý',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: const ReceiptScannerScreen(),
