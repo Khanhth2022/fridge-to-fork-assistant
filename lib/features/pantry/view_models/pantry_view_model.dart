@@ -14,20 +14,20 @@ class PantryViewModel extends ChangeNotifier {
 		if (items.isEmpty) {
 			final now = DateTime.now();
 			items = [
-				PantryItemModel(
-					name: 'Trứng',
-					quantity: 10,
-					unit: 'quả',
-					purchaseDate: now.subtract(const Duration(days: 2)),
-					expiryDate: now.add(const Duration(days: 5)),
-				),
-				PantryItemModel(
-					name: 'Sữa',
-					quantity: 2,
-					unit: 'hộp',
-					purchaseDate: now.subtract(const Duration(days: 1)),
-					expiryDate: now.add(const Duration(days: 3)),
-				),
+				   PantryItemModel(
+					   name: 'Trứng',
+					   quantity: 10.0,
+					   unit: 'quả',
+					   purchaseDate: now.subtract(const Duration(days: 2)),
+					   expiryDate: now.add(const Duration(days: 5)),
+				   ),
+				   PantryItemModel(
+					   name: 'Sữa',
+					   quantity: 2.0,
+					   unit: 'hộp',
+					   purchaseDate: now.subtract(const Duration(days: 1)),
+					   expiryDate: now.add(const Duration(days: 3)),
+				   ),
 			];
 			notifyListeners();
 		}
