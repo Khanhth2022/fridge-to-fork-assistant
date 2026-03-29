@@ -1,45 +1,44 @@
 import 'package:flutter/material.dart';
 import '../models/pantry_item_model.dart';
+import '../pantry_repository.dart';
 
 class PantryViewModel extends ChangeNotifier {
-		void updateItem(int index, PantryItemModel newItem) {
-			if (index >= 0 && index < items.length) {
-				items[index] = newItem;
-				notifyListeners();
-			}
-		}
+	final PantryRepository _repository = PantryRepository();
 	List<PantryItemModel> items = [];
 
-	void initMockData() {
-		if (items.isEmpty) {
-			final now = DateTime.now();
-			items = [
-				   PantryItemModel(
-					   name: 'Trứng',
-					   quantity: 10.0,
-					   unit: 'quả',
-					   purchaseDate: now.subtract(const Duration(days: 2)),
-					   expiryDate: now.add(const Duration(days: 5)),
-				   ),
-				   PantryItemModel(
-					   name: 'Sữa',
-					   quantity: 2.0,
-					   unit: 'hộp',
-					   purchaseDate: now.subtract(const Duration(days: 1)),
-					   expiryDate: now.add(const Duration(days: 3)),
-				   ),
-			];
-			notifyListeners();
-		}
+	PantryViewModel() {
+		loadItems();
 	}
 
-	void addItem(PantryItemModel item) {
-		items.add(item);
+	Future<void> loadItems() async {
+		items = await _repository.getAllItems();
 		notifyListeners();
 	}
 
-	void deleteItem(int index) {
-		items.removeAt(index);
-		notifyListeners();
+	       Future<bool> addItem(PantryItemModel item) async {
+		       // Kiểm tra trùng tên (không phân biệt hoa thường, loại bỏ khoảng trắng)
+		       final normalizedName = item.name.trim().toLowerCase();
+		       final exists = items.any((e) => e.name.trim().toLowerCase() == normalizedName);
+		       if (exists) {
+			       return false;
+		       }
+		       await _repository.addItem(item);
+		       await loadItems();
+		       return true;
+	       }
+
+	Future<void> updateItem(int index, PantryItemModel newItem) async {
+		await _repository.updateItem(index, newItem);
+		await loadItems();
+	}
+
+	Future<void> deleteItem(int index) async {
+		await _repository.deleteItem(index);
+		await loadItems();
+	}
+
+	Future<void> clearAll() async {
+		await _repository.clearAll();
+		await loadItems();
 	}
 }

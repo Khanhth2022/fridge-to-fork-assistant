@@ -55,8 +55,7 @@ class PantryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewModel = Provider.of<PantryViewModel>(context);
-    // Khởi tạo dữ liệu mẫu nếu danh sách rỗng
-    viewModel.initMockData();
+    // Dữ liệu được tải từ Hive qua ViewModel
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản lý tủ bếp'),
@@ -66,14 +65,14 @@ class PantryScreen extends StatelessWidget {
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/empty.png',
-                    width: 180,
-                    height: 180,
+                children: const [
+                  Icon(Icons.inbox, size: 80, color: Colors.black26),
+                  SizedBox(height: 16),
+                  Text(
+                    'Chưa có nguyên liệu nào!',
+                    style: TextStyle(fontSize: 18, color: Colors.black45),
+                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Chưa có nguyên liệu nào!', style: TextStyle(fontSize: 18, color: Colors.black45)),
                 ],
               ),
             )
@@ -157,7 +156,7 @@ class PantryScreen extends StatelessWidget {
                                     if (updated != null) {
                                       final realIndex = viewModel.items.indexOf(item);
                                       if (realIndex != -1) {
-                                        viewModel.updateItem(realIndex, updated);
+                                        await viewModel.updateItem(realIndex, updated);
                                       }
                                     }
                                   },
@@ -177,7 +176,7 @@ class PantryScreen extends StatelessWidget {
                                         newQty = double.parse(newQty.toStringAsFixed(1));
                                       }
                                       if (newQty > 0) {
-                                        viewModel.updateItem(realIndex, PantryItemModel(
+                                        await viewModel.updateItem(realIndex, PantryItemModel(
                                           name: current.name,
                                           quantity: newQty,
                                           unit: current.unit,
@@ -185,10 +184,10 @@ class PantryScreen extends StatelessWidget {
                                           expiryDate: current.expiryDate,
                                         ));
                                       } else {
-                                        viewModel.deleteItem(realIndex);
+                                        await viewModel.deleteItem(realIndex);
                                       }
                                     } else if (value == 'all') {
-                                      viewModel.deleteItem(realIndex);
+                                      await viewModel.deleteItem(realIndex);
                                     } else if (value == 'delete') {
                                       final confirm = await showDialog<bool>(
                                         context: context,
@@ -208,7 +207,7 @@ class PantryScreen extends StatelessWidget {
                                         ),
                                       );
                                       if (confirm == true) {
-                                        viewModel.deleteItem(realIndex);
+                                        await viewModel.deleteItem(realIndex);
                                       }
                                     }
                                   },
@@ -269,7 +268,17 @@ class PantryScreen extends StatelessWidget {
             ),
           );
           if (added != null) {
-            viewModel.addItem(added);
+            final success = await viewModel.addItem(added);
+            if (!success) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Nguyên liệu này đã tồn tại!'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
           }
         },
         child: const Icon(Icons.add),
