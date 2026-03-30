@@ -1,30 +1,61 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
+import 'features/pantry/models/pantry_item_model.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'features/pantry/views/pantry_screen.dart';
+import 'features/pantry/view_models/pantry_view_model.dart';
+import 'core/services/notification/notification_service.dart';
+import 'core/services/notification/background_worker.dart';
+import 'core/services/notification/expiry_notification_service.dart';
 
-import 'core/services/scanner/scanner_service.dart';
-import 'core/theme/app_theme.dart';
-import 'features/pantry/views/receipt_scanner_screen.dart';
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await _initHive();
+  await NotificationService().initialize();
 
-void main() {
-  runApp(const BepTroLyApp());
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    await BackgroundWorker.initialize(debugMode: false);
+    await BackgroundWorker.scheduleCheckExpiredItems();
+    await BackgroundWorker.schedulePantrySyncTask();
+  }
+
+  await ExpiryNotificationService.checkAndNotifyExpiringItems();
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => PantryViewModel(),
+      child: const MyApp(),
+    ),
+  );
 }
 
-class BepTroLyApp extends StatelessWidget {
-  const BepTroLyApp({super.key});
+Future<void> _initHive() async {
+  await Hive.initFlutter();
+  if (!Hive.isAdapterRegistered(0)) {
+    Hive.registerAdapter(PantryItemModelAdapter());
+  }
+  await Hive.openBox<PantryItemModel>('pantry_items');
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        Provider<ScannerService>(create: (_) => ScannerService()),
-        // Team members 1,2,3,4 can register their providers here.
+    return MaterialApp(
+      title: 'Bếp Trợ Lý',
+      theme: ThemeData(primarySwatch: Colors.green),
+      home: const PantryScreen(),
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
-      child: MaterialApp(
-        title: 'Bếp Trợ Lý',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        home: const ReceiptScannerScreen(),
-      ),
+      supportedLocales: [const Locale('vi', 'VN'), const Locale('en', 'US')],
     );
   }
 }
