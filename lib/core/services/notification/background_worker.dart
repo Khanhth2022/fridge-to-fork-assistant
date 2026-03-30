@@ -1,6 +1,7 @@
 import 'package:workmanager/workmanager.dart';
 import 'package:flutter/material.dart';
 import 'notification_service.dart';
+import 'expiry_notification_service.dart';
 
 /// Background task definitions
 class BackgroundTaskNames {
@@ -141,41 +142,8 @@ Future<void> _handleCheckExpiredItems() async {
   debugPrint('Checking for expired items...');
 
   try {
-    // TODO: Implement integration with Member 1's Pantry Repository
-    // Example pseudocode:
-    // final pantryRepo = PantryRepository();
-    // final items = await pantryRepo.getAllItems();
-    // final expiringSoon = items.where((item) => 
-    //   item.expiryDate.difference(DateTime.now()).inDays <= 3
-    // ).toList();
-
-    // For now, we'll simulate the check
-    await Future.delayed(const Duration(seconds: 2)); // Simulate API call
-
-    // Example: Send notification for simulated expired items
-    final now = DateTime.now();
-    final tomorrow = now.add(const Duration(days: 1));
-
-    // Simulate checking for items expiring tomorrow
-    bool hasExpiringItems = now.day % 7 == 0; // Arbitrary condition for demo
-
-    if (hasExpiringItems) {
-      await NotificationService().showNotification(
-        id: 1001,
-        title: '⚠️ Hàng hóa sắp hết hạn',
-        body: 'Có ${'1'} sản phẩm sắp hết hạn trong ${tomorrow.day} ngày',
-        payload: 'route:pantry',
-      );
-      debugPrint('Sent expiring items notification');
-    }
-
-    // Always send at least a debug notification
-    await NotificationService().showNotification(
-      id: 1000,
-      title: '✓ Kiểm tra HSD hoàn tất',
-      body: 'Lần kiểm tra gần nhất: ${now.toString()}',
-      payload: 'route:pantry',
-    );
+    final notifiedCount = await ExpiryNotificationService.checkAndNotifyExpiringItems();
+    debugPrint('Expired-item check completed. Notified: $notifiedCount');
   } catch (e) {
     debugPrint('Error checking expired items: $e');
     await NotificationService().showNotification(

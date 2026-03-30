@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'route_names.dart';
 import '../core/widgets/notification_test_screen.dart';
+import '../features/pantry/views/pantry_screen.dart' as pantry_view;
+import '../features/pantry/view_models/pantry_view_model.dart';
 
 // Placeholder Screens (các thành viên khác sẽ thay thế)
 class MealPlannerScreen extends StatelessWidget {
@@ -46,18 +49,6 @@ class MealDetailsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Meal Details')),
       body: Center(child: Text('Meal Details - ID: $mealId')),
-    );
-  }
-}
-
-class PantryScreen extends StatelessWidget {
-  const PantryScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Pantry')),
-      body: const Center(child: Text('Pantry Screen')),
     );
   }
 }
@@ -186,7 +177,7 @@ class HomeScreen extends StatelessWidget {
 
 /// GoRouter configuration with deep linking support
 final appRouter = GoRouter(
-  initialLocation: RouteNames.root,
+  initialLocation: RouteNames.pantryScreen,
   errorBuilder: (context, state) => Scaffold(
     appBar: AppBar(title: const Text('Error')),
     body: Center(child: Text('Error: ${state.error}')),
@@ -232,7 +223,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: RouteNames.pantryScreen,
       name: 'pantryScreen',
-      builder: (context, state) => const PantryScreen(),
+      builder: (context, state) => ChangeNotifierProvider(
+        create: (_) => PantryViewModel(),
+        child: const pantry_view.PantryScreen(),
+      ),
       routes: [
         GoRoute(
           path: 'add-item',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/pantry_item_model.dart';
 import '../pantry_repository.dart';
+import '../../../core/services/notification/expiry_notification_service.dart';
 
 class PantryViewModel extends ChangeNotifier {
 	final PantryRepository _repository = PantryRepository();
@@ -24,6 +25,7 @@ class PantryViewModel extends ChangeNotifier {
 		       }
 		       await _repository.addItem(item);
 		       await loadItems();
+		       await ExpiryNotificationService.checkAndNotifyExpiringItems();
 		       return true;
 	       }
 
@@ -36,12 +38,14 @@ class PantryViewModel extends ChangeNotifier {
 		       }
 		       await _repository.updateItem(index, newItem);
 		       await loadItems();
+		       await ExpiryNotificationService.checkAndNotifyExpiringItems();
 		       return true;
 	       }
 
 	Future<void> deleteItem(int index) async {
 		await _repository.deleteItem(index);
 		await loadItems();
+		await ExpiryNotificationService.checkAndNotifyExpiringItems();
 	}
 
 	Future<void> clearAll() async {

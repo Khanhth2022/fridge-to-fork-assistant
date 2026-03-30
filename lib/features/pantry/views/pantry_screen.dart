@@ -4,53 +4,62 @@ import 'package:flutter/services.dart';
 import '../view_models/pantry_view_model.dart';
 import '../models/pantry_item_model.dart';
 import 'add_item_bottom_sheet.dart';
+import '../../../core/widgets/notification_test_screen.dart';
 
 class PantryScreen extends StatelessWidget {
-    Widget _buildExpiryAlert(PantryViewModel viewModel) {
-      final now = DateTime.now();
-      final expiringItems = viewModel.items.where((item) {
-        final daysLeft = item.expiryDate.difference(DateTime(now.year, now.month, now.day)).inDays;
-        return daysLeft >= 0 && daysLeft <= 2;
-      }).toList();
-      if (expiringItems.isEmpty) return SizedBox.shrink();
-      return Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Color(0xFFE3F2FD), // Xanh nhạt
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Color(0xFF90CAF9)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: const [
-                Icon(Icons.notifications_active, color: Colors.black54, size: 20),
-                SizedBox(width: 8),
-                Text('Cảnh báo hạn sử dụng', style: TextStyle(fontWeight: FontWeight.bold)),
+  Widget _buildExpiryAlert(PantryViewModel viewModel) {
+    final now = DateTime.now();
+    final expiringItems = viewModel.items.where((item) {
+      final daysLeft = item.expiryDate
+          .difference(DateTime(now.year, now.month, now.day))
+          .inDays;
+      return daysLeft >= 0 && daysLeft <= 2;
+    }).toList();
+    if (expiringItems.isEmpty) return SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Color(0xFFE3F2FD), // Xanh nhạt
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Color(0xFF90CAF9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.notifications_active, color: Colors.black54, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Cảnh báo hạn sử dụng',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          ...expiringItems.map((item) {
+            final daysLeft = item.expiryDate
+                .difference(DateTime(now.year, now.month, now.day))
+                .inDays;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('${item.name} sẽ hết hạn trong $daysLeft ngày.'),
+                TextButton(
+                  onPressed: () {
+                    // TODO: Điều hướng sang màn hình gợi ý món ăn với nguyên liệu này
+                  },
+                  child: const Text('Tìm món'),
+                ),
               ],
-            ),
-            SizedBox(height: 8),
-            ...expiringItems.map((item) {
-              final daysLeft = item.expiryDate.difference(DateTime(now.year, now.month, now.day)).inDays;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('${item.name} sẽ hết hạn trong $daysLeft ngày.'),
-                  TextButton(
-                    onPressed: () {
-                      // TODO: Điều hướng sang màn hình gợi ý món ăn với nguyên liệu này
-                    },
-                    child: const Text('Tìm món'),
-                  ),
-                ],
-              );
-            }).toList(),
-          ],
-        ),
-      );
-    }
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
   const PantryScreen({Key? key}) : super(key: key);
 
   @override
@@ -60,6 +69,19 @@ class PantryScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Quản lý tủ bếp'),
         backgroundColor: const Color(0xFF9575CD),
+        actions: [
+          IconButton(
+            tooltip: 'Test notification',
+            icon: const Icon(Icons.bug_report_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NotificationTestScreen(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: viewModel.items.isEmpty
           ? Center(
@@ -85,7 +107,9 @@ class PantryScreen extends StatelessWidget {
                 }
                 final item = viewModel.items[index - 1];
                 final now = DateTime.now();
-                final daysLeft = item.expiryDate.difference(DateTime(now.year, now.month, now.day)).inDays;
+                final daysLeft = item.expiryDate
+                    .difference(DateTime(now.year, now.month, now.day))
+                    .inDays;
                 final isExpired = daysLeft < 0;
                 final isExpiringSoon = daysLeft >= 0 && daysLeft <= 2;
                 return Card(
@@ -93,84 +117,126 @@ class PantryScreen extends StatelessWidget {
                   color: isExpired
                       ? Colors.red[50]
                       : isExpiringSoon
-                          ? Colors.orange[50]
-                          : null,
+                      ? Colors.orange[50]
+                      : null,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: isExpired
                         ? const BorderSide(color: Colors.red, width: 1)
                         : isExpiringSoon
-                            ? const BorderSide(color: Colors.orange, width: 1)
-                            : BorderSide.none,
+                        ? const BorderSide(color: Colors.orange, width: 1)
+                        : BorderSide.none,
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           item.name,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 2),
-                        Text('Số lượng: ${item.quantity % 1 == 0 ? item.quantity.toInt() : item.quantity} ${item.unit}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        Text(
+                          'Số lượng: ${item.quantity % 1 == 0 ? item.quantity.toInt() : item.quantity} ${item.unit}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
+                        ),
                         const SizedBox(height: 1),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.calendar_today, size: 12, color: Colors.black38),
+                                const Icon(
+                                  Icons.calendar_today,
+                                  size: 12,
+                                  color: Colors.black38,
+                                ),
                                 const SizedBox(width: 2),
-                                Text('Ngày mua: ${PantryScreen.formatDate(item.purchaseDate)}', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+                                Text(
+                                  'Ngày mua: ${PantryScreen.formatDate(item.purchaseDate)}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black45,
+                                  ),
+                                ),
                               ],
                             ),
                             Row(
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blueAccent, size: 18),
+                                  icon: const Icon(
+                                    Icons.edit,
+                                    color: Colors.blueAccent,
+                                    size: 18,
+                                  ),
                                   tooltip: 'Cập nhật',
                                   onPressed: () async {
                                     await showModalBottomSheet(
                                       context: context,
                                       isScrollControlled: true,
                                       shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                                        borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(24),
+                                        ),
                                       ),
-                                      builder: (sheetContext) => AddItemBottomSheet(
-                                        initialItem: item,
-                                        onAdd: (updatedItem) async {
-                                          final realIndex = viewModel.items.indexOf(item);
-                                          if (realIndex != -1) {
-                                            return await viewModel.updateItem(realIndex, updatedItem);
-                                          }
-                                          return false;
-                                        },
-                                      ),
+                                      builder: (sheetContext) =>
+                                          AddItemBottomSheet(
+                                            initialItem: item,
+                                            onAdd: (updatedItem) async {
+                                              final realIndex = viewModel.items
+                                                  .indexOf(item);
+                                              if (realIndex != -1) {
+                                                return await viewModel
+                                                    .updateItem(
+                                                      realIndex,
+                                                      updatedItem,
+                                                    );
+                                              }
+                                              return false;
+                                            },
+                                          ),
                                     );
                                   },
                                 ),
                                 PopupMenuButton<String>(
                                   icon: const Icon(Icons.more_vert, size: 18),
                                   onSelected: (value) async {
-                                    final realIndex = viewModel.items.indexOf(item);
+                                    final realIndex = viewModel.items.indexOf(
+                                      item,
+                                    );
                                     if (realIndex == -1) return;
                                     if (value == 'half') {
-                                      final current = viewModel.items[realIndex];
+                                      final current =
+                                          viewModel.items[realIndex];
                                       double newQty = (current.quantity / 2);
                                       if (newQty % 1 == 0) {
                                         newQty = newQty.toInt().toDouble();
                                       } else {
-                                        newQty = double.parse(newQty.toStringAsFixed(1));
+                                        newQty = double.parse(
+                                          newQty.toStringAsFixed(1),
+                                        );
                                       }
                                       if (newQty > 0) {
-                                        await viewModel.updateItem(realIndex, PantryItemModel(
-                                          name: current.name,
-                                          quantity: newQty,
-                                          unit: current.unit,
-                                          purchaseDate: current.purchaseDate,
-                                          expiryDate: current.expiryDate,
-                                        ));
+                                        await viewModel.updateItem(
+                                          realIndex,
+                                          PantryItemModel(
+                                            name: current.name,
+                                            quantity: newQty,
+                                            unit: current.unit,
+                                            purchaseDate: current.purchaseDate,
+                                            expiryDate: current.expiryDate,
+                                          ),
+                                        );
                                       } else {
                                         await viewModel.deleteItem(realIndex);
                                       }
@@ -181,15 +247,24 @@ class PantryScreen extends StatelessWidget {
                                         context: context,
                                         builder: (ctx) => AlertDialog(
                                           title: const Text('Xác nhận'),
-                                          content: Text('Bạn có chắc muốn xóa nguyên liệu "${item.name}"?'),
+                                          content: Text(
+                                            'Bạn có chắc muốn xóa nguyên liệu "${item.name}"?',
+                                          ),
                                           actions: [
                                             TextButton(
-                                              onPressed: () => Navigator.of(ctx).pop(false),
+                                              onPressed: () =>
+                                                  Navigator.of(ctx).pop(false),
                                               child: const Text('Hủy'),
                                             ),
                                             TextButton(
-                                              onPressed: () => Navigator.of(ctx).pop(true),
-                                              child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+                                              onPressed: () =>
+                                                  Navigator.of(ctx).pop(true),
+                                              child: const Text(
+                                                'Xóa',
+                                                style: TextStyle(
+                                                  color: Colors.red,
+                                                ),
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -220,17 +295,30 @@ class PantryScreen extends StatelessWidget {
                         ),
                         Row(
                           children: [
-                            const Icon(Icons.calendar_today, size: 12, color: Colors.black38),
+                            const Icon(
+                              Icons.calendar_today,
+                              size: 12,
+                              color: Colors.black38,
+                            ),
                             const SizedBox(width: 2),
-                            Text('HSD: ${PantryScreen.formatDate(item.expiryDate)}', style: TextStyle(
-                              fontSize: 11,
-                              color: isExpired ? Colors.red : Colors.black45,
-                              fontWeight: isExpired ? FontWeight.bold : FontWeight.normal,
-                            )),
+                            Text(
+                              'HSD: ${PantryScreen.formatDate(item.expiryDate)}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isExpired ? Colors.red : Colors.black45,
+                                fontWeight: isExpired
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
                             if (isExpired)
                               const Padding(
                                 padding: EdgeInsets.only(left: 4),
-                                child: Icon(Icons.warning_amber_rounded, color: Colors.red, size: 14),
+                                child: Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: Colors.red,
+                                  size: 14,
+                                ),
                               ),
                           ],
                         ),
@@ -266,4 +354,3 @@ class PantryScreen extends StatelessWidget {
     return "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
   }
 }
-
