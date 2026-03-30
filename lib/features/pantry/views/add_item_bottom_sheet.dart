@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../models/pantry_item_model.dart';
+import '../view_models/pantry_view_model.dart';
 
 class AddItemBottomSheet extends StatefulWidget {
-  final void Function(PantryItemModel) onAdd;
+  final Future<bool> Function(PantryItemModel) onAdd;
   final PantryItemModel? initialItem;
   const AddItemBottomSheet({Key? key, required this.onAdd, this.initialItem}) : super(key: key);
 
@@ -12,9 +14,19 @@ class AddItemBottomSheet extends StatefulWidget {
 }
 
 class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
+        late final TextEditingController _purchaseDateController;
+        late final TextEditingController _expiryDateController;
+      String? _quantityError;
+      String? _unitError;
+      String? _purchaseDateError;
+      String? _expiryDateError;
+      bool _isValid = false;
+    DateTime? _purchaseDate;
+    DateTime? _expiryDate;
   late final TextEditingController _nameController;
   late final TextEditingController _quantityController;
   late final TextEditingController _unitController;
+  String? _nameError;
 
   @override
   void initState() {
@@ -24,6 +36,10 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
     _unitController = TextEditingController(text: widget.initialItem?.unit ?? '');
     _purchaseDate = widget.initialItem?.purchaseDate;
     _expiryDate = widget.initialItem?.expiryDate;
+    _nameController.addListener(_validate);
+
+    _purchaseDateController = TextEditingController(text: _purchaseDate != null ? _formatDate(_purchaseDate!) : '');
+    _expiryDateController = TextEditingController(text: _expiryDate != null ? _formatDate(_expiryDate!) : '');
   }
 
   void _validate() {
@@ -39,11 +55,25 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
 
     if (name.isEmpty) {
       _nameError = 'Vui lòng nhập tên nguyên liệu';
+    } else {
+      // Validate trùng tên khi nhập
+      final pantryViewModel = context.read<PantryViewModel>();
+      final exists = pantryViewModel.items.any((e) {
+        final isSameName = e.name.trim().toLowerCase() == name.toLowerCase();
+        // Nếu đang edit, bỏ qua chính nó
+        if (widget.initialItem != null && e.name.trim().toLowerCase() == widget.initialItem!.name.trim().toLowerCase()) {
+          return false;
+        }
+        return isSameName;
+      });
+      if (exists) {
+        _nameError = 'Nguyên liệu này đã tồn tại!';
+      }
     }
     if (quantityText.isEmpty) {
       _quantityError = 'Vui lòng nhập số lượng';
-    } else if (!RegExp(r'^(?:[1-9]\d*|0)?(?:\.[0-9]+)?$').hasMatch(quantityText) || quantity <= 0) {
-      _quantityError = 'Chỉ nhập số dương lớn hơn 0, không dấu cách, không dấu trừ';
+    } else if (!RegExp(r'^(0|[1-9]\d*)(\.[0-9]+)?$').hasMatch(quantityText) || quantity <= 0) {
+      _quantityError = 'Chỉ nhập số dương lớn hơn 0, có thể là số thập phân, không dấu cách, không dấu trừ';
     }
     if (unit.isEmpty) {
       _unitError = 'Vui lòng nhập đơn vị';
@@ -66,16 +96,20 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
   @override
   void dispose() {
     _nameController.removeListener(_validate);
-    _quantityController.removeListener(_validate);
-    _nameController.dispose();
     _quantityController.dispose();
+    _nameController.dispose();
     _unitController.dispose();
+    _purchaseDateController.dispose();
+    _expiryDateController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isUpdate = widget.initialItem != null;
+    // Cập nhật controller khi ngày thay đổi
+    _purchaseDateController.text = _purchaseDate != null ? _formatDate(_purchaseDate!) : '';
+    _expiryDateController.text = _expiryDate != null ? _formatDate(_expiryDate!) : '';
     return Padding(
       padding: MediaQuery.of(context).viewInsets,
       child: Container(
@@ -110,8 +144,8 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                     controller: _quantityController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'^(?:[1-9]\d*|0)?(?:\.[0-9]+)?$')), // chỉ số dương, cho phép thập phân
-                      FilteringTextInputFormatter.deny(RegExp(r'[\s-]')), // chặn dấu cách và dấu trừ
+                      FilteringTextInputFormatter.allow(RegExp(r'^[0-9]*\.?[0-9]*')),
+                      FilteringTextInputFormatter.deny(RegExp(r'[\s-]')),
                     ],
                     decoration: InputDecoration(
                       labelText: 'Số lượng',
@@ -139,24 +173,64 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
               children: [
                 Expanded(
                   flex: 1,
-                  child: TextField(
-                    controller: _purchaseDateController,
-                    decoration: InputDecoration(
-                      labelText: 'Ngày mua',
-                      border: const OutlineInputBorder(),
-                      errorText: _purchaseDateError,
+                  child: GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _purchaseDate ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _purchaseDate = picked;
+                          _purchaseDateController.text = _formatDate(picked);
+                        });
+                        _validate();
+                      }
+                    },
+                    child: AbsorbPointer(
+                      child: TextField(
+                        controller: _purchaseDateController,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Ngày mua',
+                          border: const OutlineInputBorder(),
+                          errorText: _purchaseDateError,
+                        ),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 1,
-                  child: TextField(
-                    controller: _expiryDateController,
-                    decoration: InputDecoration(
-                      labelText: 'Hạn sử dụng',
-                      border: const OutlineInputBorder(),
-                      errorText: _expiryDateError,
+                  child: GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _expiryDate ?? (_purchaseDate ?? DateTime.now()),
+                        firstDate: _purchaseDate ?? DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _expiryDate = picked;
+                          _expiryDateController.text = _formatDate(picked);
+                        });
+                        _validate();
+                      }
+                    },
+                    child: AbsorbPointer(
+                      child: TextField(
+                        controller: _expiryDateController,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Hạn sử dụng',
+                          border: const OutlineInputBorder(),
+                          errorText: _expiryDateError,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -174,13 +248,12 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                   ),
                   textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                onPressed: () {
+                onPressed: () async {
                   final quantityText = _quantityController.text.trim();
                   final quantity = double.tryParse(quantityText) ?? 0;
-                  // Chỉ cho phép số dương, không dấu cách, không dấu trừ
                   if (quantityText.isEmpty ||
-                          !RegExp(r'^(?:[1-9]\d*|0)?(?:\.[0-9]+)?$').hasMatch(quantityText) ||
-                          quantity <= 0) {
+                      !RegExp(r'^(?:[1-9]\d*|0)?(?:\.[0-9]+)?$').hasMatch(quantityText) ||
+                      quantity <= 0) {
                     setState(() {
                       _quantityError = 'Chỉ nhập số dương lớn hơn 0, không dấu cách, không dấu trừ';
                     });
@@ -198,8 +271,14 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                       purchaseDate: _purchaseDate!,
                       expiryDate: _expiryDate!,
                     );
-                    widget.onAdd(item);
-                    Navigator.pop(context, item);
+                    final result = await widget.onAdd(item);
+                    if (result == true) {
+                      Navigator.pop(context, item);
+                    } else {
+                      setState(() {
+                        _nameError = 'Nguyên liệu này đã tồn tại!';
+                      });
+                    }
                   }
                 },
                 child: Text(isUpdate ? 'Cập nhật' : 'Thêm'),

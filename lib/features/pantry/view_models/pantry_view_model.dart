@@ -27,10 +27,17 @@ class PantryViewModel extends ChangeNotifier {
 		       return true;
 	       }
 
-	Future<void> updateItem(int index, PantryItemModel newItem) async {
-		await _repository.updateItem(index, newItem);
-		await loadItems();
-	}
+	       Future<bool> updateItem(int index, PantryItemModel newItem) async {
+		       final normalizedName = newItem.name.trim().toLowerCase();
+		       // Bỏ qua chính item đang sửa
+		       final exists = items.asMap().entries.any((entry) => entry.key != index && entry.value.name.trim().toLowerCase() == normalizedName);
+		       if (exists) {
+			       return false;
+		       }
+		       await _repository.updateItem(index, newItem);
+		       await loadItems();
+		       return true;
+	       }
 
 	Future<void> deleteItem(int index) async {
 		await _repository.deleteItem(index);

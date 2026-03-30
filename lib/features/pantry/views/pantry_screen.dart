@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import '../view_models/pantry_view_model.dart';
 import '../models/pantry_item_model.dart';
+import 'add_item_bottom_sheet.dart';
 
 class PantryScreen extends StatelessWidget {
     Widget _buildExpiryAlert(PantryViewModel viewModel) {
@@ -55,11 +56,10 @@ class PantryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final viewModel = Provider.of<PantryViewModel>(context);
-    // Dữ liệu được tải từ Hive qua ViewModel
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản lý tủ bếp'),
-        backgroundColor: Color(0xFF9575CD),
+        backgroundColor: const Color(0xFF9575CD),
       ),
       body: viewModel.items.isEmpty
           ? Center(
@@ -76,7 +76,7 @@ class PantryScreen extends StatelessWidget {
                 ],
               ),
             )
-            : ListView.builder(
+          : ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: viewModel.items.length + 1,
               itemBuilder: (context, index) {
@@ -84,19 +84,10 @@ class PantryScreen extends StatelessWidget {
                   return _buildExpiryAlert(viewModel);
                 }
                 final item = viewModel.items[index - 1];
-                // ...existing code...
                 final now = DateTime.now();
                 final daysLeft = item.expiryDate.difference(DateTime(now.year, now.month, now.day)).inDays;
                 final isExpired = daysLeft < 0;
                 final isExpiringSoon = daysLeft >= 0 && daysLeft <= 2;
-                Color color;
-                if (daysLeft < 0) {
-                  color = Colors.red;
-                } else if (daysLeft < 3) {
-                  color = Colors.orange;
-                } else {
-                  color = Colors.black45;
-                }
                 return Card(
                   margin: const EdgeInsets.only(bottom: 6),
                   color: isExpired
@@ -140,7 +131,7 @@ class PantryScreen extends StatelessWidget {
                                   icon: const Icon(Icons.edit, color: Colors.blueAccent, size: 18),
                                   tooltip: 'Cập nhật',
                                   onPressed: () async {
-                                    final updated = await showModalBottomSheet(
+                                    await showModalBottomSheet(
                                       context: context,
                                       isScrollControlled: true,
                                       shape: const RoundedRectangleBorder(
@@ -148,17 +139,15 @@ class PantryScreen extends StatelessWidget {
                                       ),
                                       builder: (sheetContext) => AddItemBottomSheet(
                                         initialItem: item,
-                                        onAdd: (updatedItem) {
-                                          Navigator.pop(sheetContext, updatedItem);
+                                        onAdd: (updatedItem) async {
+                                          final realIndex = viewModel.items.indexOf(item);
+                                          if (realIndex != -1) {
+                                            return await viewModel.updateItem(realIndex, updatedItem);
+                                          }
+                                          return false;
                                         },
                                       ),
                                     );
-                                    if (updated != null) {
-                                      final realIndex = viewModel.items.indexOf(item);
-                                      if (realIndex != -1) {
-                                        await viewModel.updateItem(realIndex, updated);
-                                      }
-                                    }
                                   },
                                 ),
                                 PopupMenuButton<String>(
@@ -169,7 +158,6 @@ class PantryScreen extends StatelessWidget {
                                     if (value == 'half') {
                                       final current = viewModel.items[realIndex];
                                       double newQty = (current.quantity / 2);
-                                      // Làm tròn 1 chữ số thập phân nếu cần
                                       if (newQty % 1 == 0) {
                                         newQty = newQty.toInt().toDouble();
                                       } else {
@@ -253,33 +241,21 @@ class PantryScreen extends StatelessWidget {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Color(0xFF9575CD),
+        backgroundColor: const Color(0xFF9575CD),
         onPressed: () async {
-          final added = await showModalBottomSheet(
+          await showModalBottomSheet(
             context: context,
             isScrollControlled: true,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             builder: (sheetContext) => AddItemBottomSheet(
-              onAdd: (item) {
-                Navigator.pop(sheetContext, item);
+              onAdd: (item) async {
+                final success = await viewModel.addItem(item);
+                return success;
               },
             ),
           );
-          if (added != null) {
-            final success = await viewModel.addItem(added);
-            if (!success) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Nguyên liệu này đã tồn tại!'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            }
-          }
         },
         child: const Icon(Icons.add),
       ),
@@ -291,181 +267,3 @@ class PantryScreen extends StatelessWidget {
   }
 }
 
-class AddItemBottomSheet extends StatefulWidget {
-  final PantryItemModel? initialItem;
-  final Function(PantryItemModel)? onAdd;
-  const AddItemBottomSheet({Key? key, this.initialItem, this.onAdd}) : super(key: key);
-
-  @override
-  State<AddItemBottomSheet> createState() => _AddItemBottomSheetState();
-}
-
-class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _quantityController;
-  late TextEditingController _unitController;
-  DateTime? _purchaseDate;
-  DateTime? _expiryDate;
-  String? _expiryDateError;
-
-  @override
-  void initState() {
-    super.initState();
-    final item = widget.initialItem;
-    _nameController = TextEditingController(text: item?.name ?? '');
-    _quantityController = TextEditingController(
-      text: item?.quantity != null
-          ? (item!.quantity % 1 == 0 ? item.quantity.toInt().toString() : item.quantity.toString())
-          : ''
-    );
-    _unitController = TextEditingController(text: item?.unit ?? '');
-    _purchaseDate = item?.purchaseDate ?? DateTime.now();
-    _expiryDate = item?.expiryDate ?? DateTime.now().add(const Duration(days: 7));
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _quantityController.dispose();
-    _unitController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Thêm/Cập nhật mặt hàng', style: TextStyle(fontSize: 18)),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Tên nguyên liệu'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Nhập tên' : null,
-              ),
-              TextFormField(
-                controller: _quantityController,
-                decoration: const InputDecoration(labelText: 'Số lượng'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^(?!0(?![.]))[0-9]*\.?[0-9]*')),
-                ],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Nhập số lượng';
-                  if (v.contains(' ') || v.contains('-')) return 'Chỉ nhập số dương, không dấu cách';
-                  final d = double.tryParse(v);
-                  if (d == null) return 'Nhập số hợp lệ';
-                  if (d <= 0) return 'Số lượng phải > 0';
-                  return null;
-                },
-              ),
-              TextFormField(
-                controller: _unitController,
-                decoration: const InputDecoration(labelText: 'Đơn vị'),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^[A-Za-zÀ-ỹà-ỹ\s]+')),
-                ],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Nhập đơn vị';
-                  if (v.startsWith(' ')) return 'Không nhập khoảng trắng ở đầu';
-                  if (!RegExp(r'^[A-Za-zÀ-ỹà-ỹ\s]+$').hasMatch(v)) return 'Chỉ nhập chữ và khoảng trắng';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Text('Ngày mua:'),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _purchaseDate ?? DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked != null) setState(() => _purchaseDate = picked);
-                    },
-                    child: Text(_purchaseDate != null ? PantryScreen.formatDate(_purchaseDate!) : 'Chọn'),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  const Text('HSD:'),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _expiryDate ?? DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked != null) {
-                        if (_purchaseDate != null && picked.isBefore(_purchaseDate!)) {
-                          setState(() {
-                            _expiryDateError = 'Hạn sử dụng phải sau hoặc bằng ngày mua!';
-                            _expiryDate = null;
-                          });
-                        } else {
-                          setState(() {
-                            _expiryDate = picked;
-                            _expiryDateError = null;
-                          });
-                        }
-                      }
-                    },
-                    child: Text(_expiryDate != null ? PantryScreen.formatDate(_expiryDate!) : 'Chọn'),
-                  ),
-                ],
-              ),
-              if (_expiryDateError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _expiryDateError!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState?.validate() != true) return;
-                  if (_purchaseDate == null || _expiryDate == null) return;
-                  if (_expiryDateError != null) return;
-                  // Validate lại trước khi lưu (phòng trường hợp sửa ngày mua hoặc HSD)
-                  if (_expiryDate!.isBefore(_purchaseDate!)) {
-                    setState(() {
-                      _expiryDateError = 'Hạn sử dụng phải sau hoặc bằng ngày mua!';
-                    });
-                    return;
-                  }
-                  final item = PantryItemModel(
-                    name: _nameController.text.trim(),
-                    quantity: double.parse(_quantityController.text),
-                    unit: _unitController.text.trim(),
-                    purchaseDate: _purchaseDate!,
-                    expiryDate: _expiryDate!,
-                  );
-                  widget.onAdd?.call(item);
-                },
-                child: const Text('Lưu'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
