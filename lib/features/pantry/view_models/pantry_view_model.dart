@@ -42,14 +42,21 @@ class PantryViewModel extends ChangeNotifier {
     if (exists) {
       return false;
     }
-    await _repository.updateItem(index, newItem);
+    final String itemId = items[index].itemId;
+    final PantryItemModel updatedItem = newItem.copyWith(
+      itemId: itemId,
+      updatedAtUtcMs: DateTime.now().millisecondsSinceEpoch,
+      isDirty: true,
+    );
+    await _repository.updateItem(itemId, updatedItem);
     await loadItems();
     await ExpiryNotificationService.checkAndNotifyExpiringItems();
     return true;
   }
 
   Future<void> deleteItem(int index) async {
-    await _repository.deleteItem(index);
+    final String itemId = items[index].itemId;
+    await _repository.deleteItem(itemId);
     await loadItems();
     await ExpiryNotificationService.checkAndNotifyExpiringItems();
   }
