@@ -20,7 +20,9 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: 'Test Notification');
-    _bodyController = TextEditingController(text: 'This is a test notification');
+    _bodyController = TextEditingController(
+      text: 'This is a test notification',
+    );
     _payloadController = TextEditingController(text: 'route:pantry');
   }
 
@@ -144,8 +146,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                       onPressed: () => _sendTestNotification(
                         title: '🛒 Danh sách mua sắm',
                         body: 'Bạn có 5 mục trong danh sách',
-                        payload:
-                            DeepLinkHandler.buildShoppingListPayload(),
+                        payload: DeepLinkHandler.buildShoppingListPayload(),
                       ),
                       child: const Text('Send: Shopping List'),
                     ),
@@ -171,8 +172,9 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                       onPressed: () => _sendTestNotification(
                         title: '👨‍🍳 Công thức mới: Cơm chiên',
                         body: 'Tìm hiểu công thức cơm chiên ngon',
-                        payload:
-                            DeepLinkHandler.buildRecipePayload(recipeId: '123'),
+                        payload: DeepLinkHandler.buildRecipePayload(
+                          recipeId: '123',
+                        ),
                       ),
                       child: const Text('Send: New Recipe'),
                     ),
@@ -198,8 +200,9 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                       onPressed: () => _sendTestNotification(
                         title: 'Nhắc nhở bữa tối',
                         body: 'Hãy lên kế hoạch cho bữa tối',
-                        payload:
-                            DeepLinkHandler.buildMealPayload(mealId: '456'),
+                        payload: DeepLinkHandler.buildMealPayload(
+                          mealId: '456',
+                        ),
                       ),
                       child: const Text('Send: Meal Reminder'),
                     ),
@@ -227,13 +230,13 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                 await NotificationService().cancelAllNotifications();
                 if (mounted) {
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('All notifications cancelled')),
+                    const SnackBar(
+                      content: Text('All notifications cancelled'),
+                    ),
                   );
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text('Cancel All Notifications'),
             ),
           ],

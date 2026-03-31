@@ -18,7 +18,7 @@ class NotificationService {
   /// Initialize the notification service
   Future<void> initialize({NotificationCallback? onNotificationTapped}) async {
     _onNotificationTapped = onNotificationTapped;
-    
+
     _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
     // Android initialization
@@ -28,11 +28,11 @@ class NotificationService {
     // iOS initialization
     final DarwinInitializationSettings iosInitSettings =
         DarwinInitializationSettings(
-      defaultPresentAlert: true,
-      defaultPresentBadge: true,
-      defaultPresentSound: true,
-      onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
-    );
+          defaultPresentAlert: true,
+          defaultPresentBadge: true,
+          defaultPresentSound: true,
+          onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
+        );
 
     final InitializationSettings initSettings = InitializationSettings(
       android: androidInitSettings,
@@ -49,21 +49,25 @@ class NotificationService {
     try {
       await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
     } catch (e) {
-      debugPrint('Android permission request not available or already granted: $e');
+      debugPrint(
+        'Android permission request not available or already granted: $e',
+      );
     }
 
     // Request iOS permissions
     await _flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
+          IOSFlutterLocalNotificationsPlugin
+        >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
   /// Send a simple notification
-  /// 
+  ///
   /// [id] - Unique notification ID
   /// [title] - Notification title
   /// [body] - Notification body
@@ -77,16 +81,15 @@ class NotificationService {
     try {
       const AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
-        'default_channel',
-        'Default Channel',
-        importance: Importance.max,
-        priority: Priority.high,
-        enableVibration: true,
-        enableLights: true,
-      );
+            'default_channel',
+            'Default Channel',
+            importance: Importance.max,
+            priority: Priority.high,
+            enableVibration: true,
+            enableLights: true,
+          );
 
-      const DarwinNotificationDetails iosDetails =
-          DarwinNotificationDetails(
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
@@ -179,9 +182,7 @@ class NotificationService {
 
   // Callback when notification is tapped
   void _onNotificationResponse(NotificationResponse response) async {
-    debugPrint(
-      'Notification triggered: ${response.payload}',
-    );
+    debugPrint('Notification triggered: ${response.payload}');
     await _onNotificationTapped?.call(response.payload);
   }
 

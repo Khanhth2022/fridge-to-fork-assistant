@@ -7,7 +7,7 @@ import 'expiry_notification_service.dart';
 class BackgroundTaskNames {
   /// Daily task to check for expired items at 8 AM
   static const String checkExpiredItems = 'checkExpiredItems';
-  
+
   /// Periodic task to sync pantry data
   static const String syncPantryData = 'syncPantryData';
 }
@@ -23,7 +23,7 @@ class BackgroundWorker {
   BackgroundWorker._internal();
 
   /// Initialize background tasks
-  /// 
+  ///
   /// This should be called in main() before runApp()
   /// Enable debug mode only during development
   static Future<void> initialize({bool debugMode = false}) async {
@@ -35,7 +35,7 @@ class BackgroundWorker {
   }
 
   /// Schedule daily check for expired items at 8 AM
-  /// 
+  ///
   /// This uses a daily periodic task that starts from 8 AM
   static Future<void> scheduleCheckExpiredItems() async {
     await Workmanager().registerPeriodicTask(
@@ -96,7 +96,7 @@ class BackgroundWorker {
 
     final delay = scheduledTime.difference(now);
     debugPrint('Initial delay for 8 AM task: ${delay.inMinutes} minutes');
-    
+
     return delay;
   }
 
@@ -104,7 +104,7 @@ class BackgroundWorker {
 }
 
 /// Callback dispatcher for background tasks
-/// 
+///
 /// This must be a top-level function and cannot access instance variables
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -135,14 +135,15 @@ void callbackDispatcher() {
 }
 
 /// Handle expired items check
-/// 
+///
 /// This fetches items from the pantry repository and checks for items
 /// that are expiring soon (within 3 days) or already expired
 Future<void> _handleCheckExpiredItems() async {
   debugPrint('Checking for expired items...');
 
   try {
-    final notifiedCount = await ExpiryNotificationService.checkAndNotifyExpiringItems();
+    final notifiedCount =
+        await ExpiryNotificationService.checkAndNotifyExpiringItems();
     debugPrint('Expired-item check completed. Notified: $notifiedCount');
   } catch (e) {
     debugPrint('Error checking expired items: $e');
@@ -156,7 +157,7 @@ Future<void> _handleCheckExpiredItems() async {
 }
 
 /// Handle pantry data sync
-/// 
+///
 /// This synchronizes pantry data from local storage with any remote sources
 Future<void> _handleSyncPantryData() async {
   debugPrint('Syncing pantry data...');

@@ -43,3 +43,23 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase Configuration (SENSITIVE - do not commit)
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Android signing keys (SENSITIVE)
+android/app/keystore.jks
+android/key.properties
+android/app/release.jks
+android/app/debug.keystore
+
+# Local environment files
+.env
+.env.local
+local.properties
+
+# IDE settings
+.vscode/launch.json
+.vscode/settings.json

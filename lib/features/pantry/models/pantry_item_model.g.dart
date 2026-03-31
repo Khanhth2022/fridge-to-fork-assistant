@@ -18,17 +18,22 @@ class PantryItemModelAdapter extends TypeAdapter<PantryItemModel> {
     };
     return PantryItemModel(
       name: fields[0] as String,
-      quantity: fields[1] as double,
+      quantity: (fields[1] as num).toDouble(),
       unit: fields[2] as String,
       purchaseDate: fields[3] as DateTime,
       expiryDate: fields[4] as DateTime,
+      itemId: fields[5] as String?,
+      updatedAtUtcMs: fields[6] as int?,
+      deletedAtUtcMs: fields[7] as int?,
+      deviceId: fields[8] as String?,
+      isDirty: (fields[9] as bool?) ?? true,
     );
   }
 
   @override
   void write(BinaryWriter writer, PantryItemModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -38,7 +43,17 @@ class PantryItemModelAdapter extends TypeAdapter<PantryItemModel> {
       ..writeByte(3)
       ..write(obj.purchaseDate)
       ..writeByte(4)
-      ..write(obj.expiryDate);
+      ..write(obj.expiryDate)
+      ..writeByte(5)
+      ..write(obj.itemId)
+      ..writeByte(6)
+      ..write(obj.updatedAtUtcMs)
+      ..writeByte(7)
+      ..write(obj.deletedAtUtcMs)
+      ..writeByte(8)
+      ..write(obj.deviceId)
+      ..writeByte(9)
+      ..write(obj.isDirty);
   }
 
   @override

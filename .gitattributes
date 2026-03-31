@@ -1,0 +1,47 @@
+# Git attributes for consistent line endings across platforms
+# This is especially important when working with Windows, macOS, and Linux
+
+# Auto-normalize line endings on commit
+* text=auto
+
+# Enforce LF for shell scripts and most source files
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+
+# Dart/Flutter files
+*.dart text eol=lf
+*.gradle text eol=lf
+*.gradle.kts text eol=lf
+*.kt text eol=lf
+*.java text eol=lf
+
+# Configuration files
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.xml text eol=lf
+*.properties text eol=lf
+
+# Markdown
+*.md text eol=lf
+
+# Documentation
+*.txt text eol=lf
+LICENSE text eol=lf
+
+# Binary files (do not modify)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.zip binary
+*.tar binary
+*.jar binary
+*.apk binary
+*.aar binary

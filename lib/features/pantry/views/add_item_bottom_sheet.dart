@@ -7,22 +7,23 @@ import '../view_models/pantry_view_model.dart';
 class AddItemBottomSheet extends StatefulWidget {
   final Future<bool> Function(PantryItemModel) onAdd;
   final PantryItemModel? initialItem;
-  const AddItemBottomSheet({Key? key, required this.onAdd, this.initialItem}) : super(key: key);
+  const AddItemBottomSheet({Key? key, required this.onAdd, this.initialItem})
+    : super(key: key);
 
   @override
   State<AddItemBottomSheet> createState() => _AddItemBottomSheetState();
 }
 
 class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
-        late final TextEditingController _purchaseDateController;
-        late final TextEditingController _expiryDateController;
-      String? _quantityError;
-      String? _unitError;
-      String? _purchaseDateError;
-      String? _expiryDateError;
-      bool _isValid = false;
-    DateTime? _purchaseDate;
-    DateTime? _expiryDate;
+  late final TextEditingController _purchaseDateController;
+  late final TextEditingController _expiryDateController;
+  String? _quantityError;
+  String? _unitError;
+  String? _purchaseDateError;
+  String? _expiryDateError;
+  bool _isValid = false;
+  DateTime? _purchaseDate;
+  DateTime? _expiryDate;
   late final TextEditingController _nameController;
   late final TextEditingController _quantityController;
   late final TextEditingController _unitController;
@@ -31,15 +32,25 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.initialItem?.name ?? '');
-    _quantityController = TextEditingController(text: widget.initialItem?.quantity.toString() ?? '');
-    _unitController = TextEditingController(text: widget.initialItem?.unit ?? '');
+    _nameController = TextEditingController(
+      text: widget.initialItem?.name ?? '',
+    );
+    _quantityController = TextEditingController(
+      text: widget.initialItem?.quantity.toString() ?? '',
+    );
+    _unitController = TextEditingController(
+      text: widget.initialItem?.unit ?? '',
+    );
     _purchaseDate = widget.initialItem?.purchaseDate;
     _expiryDate = widget.initialItem?.expiryDate;
     _nameController.addListener(_validate);
 
-    _purchaseDateController = TextEditingController(text: _purchaseDate != null ? _formatDate(_purchaseDate!) : '');
-    _expiryDateController = TextEditingController(text: _expiryDate != null ? _formatDate(_expiryDate!) : '');
+    _purchaseDateController = TextEditingController(
+      text: _purchaseDate != null ? _formatDate(_purchaseDate!) : '',
+    );
+    _expiryDateController = TextEditingController(
+      text: _expiryDate != null ? _formatDate(_expiryDate!) : '',
+    );
   }
 
   void _validate() {
@@ -61,7 +72,9 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
       final exists = pantryViewModel.items.any((e) {
         final isSameName = e.name.trim().toLowerCase() == name.toLowerCase();
         // Nếu đang edit, bỏ qua chính nó
-        if (widget.initialItem != null && e.name.trim().toLowerCase() == widget.initialItem!.name.trim().toLowerCase()) {
+        if (widget.initialItem != null &&
+            e.name.trim().toLowerCase() ==
+                widget.initialItem!.name.trim().toLowerCase()) {
           return false;
         }
         return isSameName;
@@ -72,8 +85,10 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
     }
     if (quantityText.isEmpty) {
       _quantityError = 'Vui lòng nhập số lượng';
-    } else if (!RegExp(r'^(0|[1-9]\d*)(\.[0-9]+)?$').hasMatch(quantityText) || quantity <= 0) {
-      _quantityError = 'Chỉ nhập số dương lớn hơn 0, có thể là số thập phân, không dấu cách, không dấu trừ';
+    } else if (!RegExp(r'^(0|[1-9]\d*)(\.[0-9]+)?$').hasMatch(quantityText) ||
+        quantity <= 0) {
+      _quantityError =
+          'Chỉ nhập số dương lớn hơn 0, có thể là số thập phân, không dấu cách, không dấu trừ';
     }
     if (unit.isEmpty) {
       _unitError = 'Vui lòng nhập đơn vị';
@@ -89,7 +104,12 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
     } else if (_purchaseDate != null && _expiryDate!.isBefore(_purchaseDate!)) {
       _expiryDateError = 'HSD phải sau ngày mua';
     }
-    _isValid = _nameError == null && _quantityError == null && _unitError == null && _purchaseDateError == null && _expiryDateError == null;
+    _isValid =
+        _nameError == null &&
+        _quantityError == null &&
+        _unitError == null &&
+        _purchaseDateError == null &&
+        _expiryDateError == null;
     if (mounted) setState(() {});
   }
 
@@ -108,8 +128,12 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
   Widget build(BuildContext context) {
     final isUpdate = widget.initialItem != null;
     // Cập nhật controller khi ngày thay đổi
-    _purchaseDateController.text = _purchaseDate != null ? _formatDate(_purchaseDate!) : '';
-    _expiryDateController.text = _expiryDate != null ? _formatDate(_expiryDate!) : '';
+    _purchaseDateController.text = _purchaseDate != null
+        ? _formatDate(_purchaseDate!)
+        : '';
+    _expiryDateController.text = _expiryDate != null
+        ? _formatDate(_expiryDate!)
+        : '';
     return Padding(
       padding: MediaQuery.of(context).viewInsets,
       child: Container(
@@ -142,9 +166,13 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                   flex: 2,
                   child: TextField(
                     controller: _quantityController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'^[0-9]*\.?[0-9]*')),
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^[0-9]*\.?[0-9]*'),
+                      ),
                       FilteringTextInputFormatter.deny(RegExp(r'[\s-]')),
                     ],
                     decoration: InputDecoration(
@@ -209,7 +237,8 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: _expiryDate ?? (_purchaseDate ?? DateTime.now()),
+                        initialDate:
+                            _expiryDate ?? (_purchaseDate ?? DateTime.now()),
                         firstDate: _purchaseDate ?? DateTime(2000),
                         lastDate: DateTime(2100),
                       );
@@ -246,16 +275,22 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 onPressed: () async {
                   final quantityText = _quantityController.text.trim();
                   final quantity = double.tryParse(quantityText) ?? 0;
                   if (quantityText.isEmpty ||
-                      !RegExp(r'^(?:[1-9]\d*|0)?(?:\.[0-9]+)?$').hasMatch(quantityText) ||
+                      !RegExp(
+                        r'^(?:[1-9]\d*|0)?(?:\.[0-9]+)?$',
+                      ).hasMatch(quantityText) ||
                       quantity <= 0) {
                     setState(() {
-                      _quantityError = 'Chỉ nhập số dương lớn hơn 0, không dấu cách, không dấu trừ';
+                      _quantityError =
+                          'Chỉ nhập số dương lớn hơn 0, không dấu cách, không dấu trừ';
                     });
                     return;
                   }
