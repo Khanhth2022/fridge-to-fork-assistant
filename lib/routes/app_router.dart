@@ -5,6 +5,8 @@ import 'route_names.dart';
 import '../core/widgets/notification_test_screen.dart';
 import '../features/pantry/views/pantry_screen.dart' as pantry_view;
 import '../features/pantry/view_models/pantry_view_model.dart';
+import '../features/recipes/views/recipe_list_screen.dart';
+import '../features/recipes/views/recipe_detail_screen.dart';
 
 // Placeholder Screens (các thành viên khác sẽ thay thế)
 class MealPlannerScreen extends StatelessWidget {
@@ -82,31 +84,6 @@ class ReceiptScannerScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Receipt Scanner')),
       body: const Center(child: Text('Receipt Scanner Screen')),
-    );
-  }
-}
-
-class RecipesListScreen extends StatelessWidget {
-  const RecipesListScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recipes')),
-      body: const Center(child: Text('Recipes List Screen')),
-    );
-  }
-}
-
-class RecipeDetailsScreen extends StatelessWidget {
-  final String recipeId;
-  const RecipeDetailsScreen({required this.recipeId, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recipe Details')),
-      body: Center(child: Text('Recipe Details - ID: $recipeId')),
     );
   }
 }
@@ -248,14 +225,22 @@ final appRouter = GoRouter(
     GoRoute(
       path: RouteNames.recipesListScreen,
       name: 'recipesList',
-      builder: (context, state) => const RecipesListScreen(),
+      builder: (context, state) => const RecipeListScreen(),
       routes: [
         GoRoute(
           path: 'details/:recipeId',
           name: 'recipeDetails',
           builder: (context, state) {
-            final recipeId = state.pathParameters['recipeId'] ?? '';
-            return RecipeDetailsScreen(recipeId: recipeId);
+            final String recipeIdParam = state.pathParameters['recipeId'] ?? '';
+            final int? recipeId = int.tryParse(recipeIdParam);
+
+            if (recipeId == null) {
+              return const Scaffold(
+                body: Center(child: Text('Invalid recipe id.')),
+              );
+            }
+
+            return RecipeDetailScreen(recipeId: recipeId);
           },
         ),
       ],

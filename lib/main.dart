@@ -4,12 +4,10 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'features/pantry/models/pantry_item_model.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:provider/provider.dart';
-import 'features/pantry/views/pantry_screen.dart';
-import 'features/pantry/view_models/pantry_view_model.dart';
 import 'core/services/notification/notification_service.dart';
 import 'core/services/notification/background_worker.dart';
 import 'core/services/notification/expiry_notification_service.dart';
+import 'routes/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,12 +22,7 @@ void main() async {
 
   await ExpiryNotificationService.checkAndNotifyExpiringItems();
 
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => PantryViewModel(),
-      child: const MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 Future<void> _initHive() async {
@@ -41,14 +34,14 @@ Future<void> _initHive() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'Bếp Trợ Lý',
       theme: ThemeData(primarySwatch: Colors.green),
-      home: const PantryScreen(),
+      routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
