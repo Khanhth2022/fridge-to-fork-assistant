@@ -1,15 +1,153 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/services.dart';
 import '../view_models/pantry_view_model.dart';
 import '../models/pantry_item_model.dart';
 import 'add_item_bottom_sheet.dart';
+import 'scanned_items_review_sheet.dart';
 import '../../../core/widgets/notification_test_screen.dart';
 import '../../../core/widgets/bottom_nav_bar.dart';
+import '../../../core/services/scanner/scanner_service.dart';
+import 'receipt_scanner_screen.dart';
 import '../../../features/auth/view_models/auth_view_model.dart';
 import '../../../features/auth/views/login_screen.dart';
 
 class PantryScreen extends StatelessWidget {
+  Future<void> _openManualAddSheet(
+    BuildContext context,
+    PantryViewModel viewModel,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => AddItemBottomSheet(
+        onAdd: (item) async {
+          final success = await viewModel.addItem(item);
+          return success;
+        },
+      ),
+    );
+  }
+
+  Future<void> _openReceiptScanner(
+    BuildContext context,
+    PantryViewModel viewModel,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Provider<ScannerService>(
+          create: (_) => ScannerService(),
+          child: ReceiptScannerScreen(
+            onApplyIngredients: (ingredients) async {
+              await _handleScannedIngredients(context, viewModel, ingredients);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleScannedIngredients(
+    BuildContext context,
+    PantryViewModel viewModel,
+    List<String> ingredients,
+  ) async {
+    final List<String> normalizedIngredients = ingredients
+        .map((String ingredient) => ingredient.trim())
+        .where((String ingredient) => ingredient.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (normalizedIngredients.isEmpty) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không có nguyên liệu hợp lệ từ ảnh.')),
+      );
+      return;
+    }
+
+    final List<PantryItemModel>? items =
+        await showModalBottomSheet<List<PantryItemModel>>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          builder: (_) =>
+              ScannedItemsReviewSheet(ingredients: normalizedIngredients),
+        );
+
+    if (!context.mounted || items == null || items.isEmpty) {
+      return;
+    }
+
+    int addedCount = 0;
+    int duplicateCount = 0;
+    for (final PantryItemModel item in items) {
+      final bool success = await viewModel.addItem(item);
+      if (success) {
+        addedCount++;
+      } else {
+        duplicateCount++;
+      }
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+
+    final String message = duplicateCount > 0
+        ? 'Đã thêm $addedCount nguyên liệu, bỏ qua $duplicateCount mục trùng tên.'
+        : 'Đã thêm $addedCount nguyên liệu vào kho.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showAddOptions(
+    BuildContext context,
+    PantryViewModel viewModel,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_note_outlined),
+                title: const Text('Thêm thủ công'),
+                subtitle: const Text('Nhập nguyên liệu bằng form'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _openManualAddSheet(context, viewModel);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.document_scanner_outlined),
+                title: const Text('Quét hóa đơn'),
+                subtitle: const Text('OCR + Barcode để gợi ý nguyên liệu'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _openReceiptScanner(context, viewModel);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildExpiryAlert(PantryViewModel viewModel) {
     final now = DateTime.now();
     final expiringItems = viewModel.items.where((item) {
@@ -99,9 +237,9 @@ class PantryScreen extends StatelessWidget {
             ),
             onSelected: (value) async {
               if (value == 'login') {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
+                await Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
               } else if (value == 'logout') {
                 await authViewModel.logout();
               }
@@ -391,19 +529,7 @@ class PantryScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF9575CD),
         onPressed: () async {
-          await showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            builder: (sheetContext) => AddItemBottomSheet(
-              onAdd: (item) async {
-                final success = await viewModel.addItem(item);
-                return success;
-              },
-            ),
-          );
+          await _showAddOptions(context, viewModel);
         },
         child: const Icon(Icons.add),
       ),

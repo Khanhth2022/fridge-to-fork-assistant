@@ -9,10 +9,10 @@ import 'package:http/http.dart' as http;
 class RecipeApiClient {
   RecipeApiClient({http.Client? httpClient, String? apiKey})
     : _httpClient = httpClient ?? http.Client(),
-      _apiKey =
-          apiKey ??
-          dotenv.env['SPOONACULAR_API_KEY'] ??
-          const String.fromEnvironment('SPOONACULAR_API_KEY');
+      _apiKey = (apiKey != null && apiKey.trim().isNotEmpty)
+          ? apiKey
+          : dotenv.env['SPOONACULAR_API_KEY'] ??
+                const String.fromEnvironment('SPOONACULAR_API_KEY');
 
   static const String _baseHost = 'api.spoonacular.com';
   static const Duration _requestTimeout = Duration(seconds: 15);

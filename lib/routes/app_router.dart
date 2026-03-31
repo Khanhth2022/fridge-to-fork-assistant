@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'route_names.dart';
 import '../core/widgets/notification_test_screen.dart';
+import '../core/services/scanner/scanner_service.dart';
 import '../core/widgets/bottom_nav_bar.dart';
 import '../features/pantry/views/pantry_screen.dart' as pantry_view;
+import '../features/pantry/views/receipt_scanner_screen.dart' as pantry_receipt;
 import '../features/pantry/view_models/pantry_view_model.dart';
 import '../features/recipes/views/recipe_list_screen.dart';
 import '../features/recipes/views/recipe_detail_screen.dart';
@@ -78,8 +80,8 @@ class AddItemScreen extends StatelessWidget {
   }
 }
 
-class ReceiptScannerScreen extends StatelessWidget {
-  const ReceiptScannerScreen({super.key});
+class ReceiptScannerPlaceholderScreen extends StatelessWidget {
+  const ReceiptScannerPlaceholderScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +221,10 @@ final appRouter = GoRouter(
         GoRoute(
           path: 'receipt-scanner',
           name: 'receiptScanner',
-          builder: (context, state) => const ReceiptScannerScreen(),
+          builder: (context, state) => Provider<ScannerService>(
+            create: (_) => ScannerService(),
+            child: const pantry_receipt.ReceiptScannerScreen(),
+          ),
         ),
       ],
     ),
