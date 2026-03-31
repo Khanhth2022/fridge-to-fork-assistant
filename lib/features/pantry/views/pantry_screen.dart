@@ -4,150 +4,12 @@ import 'package:flutter/services.dart';
 import '../view_models/pantry_view_model.dart';
 import '../models/pantry_item_model.dart';
 import 'add_item_bottom_sheet.dart';
-import 'scanned_items_review_sheet.dart';
 import '../../../core/widgets/notification_test_screen.dart';
-import '../../../core/services/scanner/scanner_service.dart';
-import 'receipt_scanner_screen.dart';
+import '../../../core/widgets/bottom_nav_bar.dart';
 import '../../../features/auth/view_models/auth_view_model.dart';
 import '../../../features/auth/views/login_screen.dart';
-import '../../../core/services/sync/sync_service.dart';
 
 class PantryScreen extends StatelessWidget {
-  Future<void> _openManualAddSheet(
-    BuildContext context,
-    PantryViewModel viewModel,
-  ) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => AddItemBottomSheet(
-        onAdd: (item) async {
-          final success = await viewModel.addItem(item);
-          return success;
-        },
-      ),
-    );
-  }
-
-  Future<void> _openReceiptScanner(
-    BuildContext context,
-    PantryViewModel viewModel,
-  ) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Provider<ScannerService>(
-          create: (_) => ScannerService(),
-          child: ReceiptScannerScreen(
-            onApplyIngredients: (ingredients) async {
-              await _handleScannedIngredients(context, viewModel, ingredients);
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleScannedIngredients(
-    BuildContext context,
-    PantryViewModel viewModel,
-    List<String> ingredients,
-  ) async {
-    final normalizedIngredients = ingredients
-        .map((ingredient) => ingredient.trim())
-        .where((ingredient) => ingredient.isNotEmpty)
-        .toSet()
-        .toList();
-
-    if (normalizedIngredients.isEmpty) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không có nguyên liệu hợp lệ từ ảnh.')),
-      );
-      return;
-    }
-
-    final items = await showModalBottomSheet<List<PantryItemModel>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) =>
-          ScannedItemsReviewSheet(ingredients: normalizedIngredients),
-    );
-
-    if (!context.mounted || items == null || items.isEmpty) {
-      return;
-    }
-
-    int addedCount = 0;
-    int duplicateCount = 0;
-    for (final item in items) {
-      final success = await viewModel.addItem(item);
-      if (success) {
-        addedCount++;
-      } else {
-        duplicateCount++;
-      }
-    }
-
-    if (!context.mounted) {
-      return;
-    }
-
-    final message = duplicateCount > 0
-        ? 'Đã thêm $addedCount nguyên liệu, bỏ qua $duplicateCount mục trùng tên.'
-        : 'Đã thêm $addedCount nguyên liệu vào kho.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _showAddOptions(
-    BuildContext context,
-    PantryViewModel viewModel,
-  ) async {
-    await showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.edit_note_outlined),
-                title: const Text('Thêm thủ công'),
-                subtitle: const Text('Nhập nguyên liệu bằng form'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _openManualAddSheet(context, viewModel);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.document_scanner_outlined),
-                title: const Text('Quét hóa đơn'),
-                subtitle: const Text('OCR + Barcode để gợi ý nguyên liệu'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _openReceiptScanner(context, viewModel);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildExpiryAlert(PantryViewModel viewModel) {
     final now = DateTime.now();
     final expiringItems = viewModel.items.where((item) {
@@ -186,7 +48,13 @@ class PantryScreen extends StatelessWidget {
             return Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('${item.name} sẽ hết hạn trong $daysLeft ngày.'),
+                Expanded(
+                  child: Text(
+                    '${item.name} sẽ hết hạn trong $daysLeft ngày.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 TextButton(
                   onPressed: () {
                     // TODO: Điều hướng sang màn hình gợi ý món ăn với nguyên liệu này
@@ -203,215 +71,64 @@ class PantryScreen extends StatelessWidget {
 
   const PantryScreen({Key? key}) : super(key: key);
 
-  Future<void> _showAccountMenu(
-    BuildContext context,
-    AuthViewModel authViewModel,
-    SyncService syncService,
-  ) async {
-    await showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return Consumer<AuthViewModel>(
-          builder: (context, authVM, _) {
-            if (authVM.isLoggedIn) {
-              return SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Tài khoản',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 8),
-                          Text('Email: ${authVM.userEmail ?? ""}'),
-                          const SizedBox(height: 4),
-                          Text('Trạng thái: Đã đăng nhập'),
-                        ],
-                      ),
-                    ),
-                    const Divider(),
-                    ListTile(
-                      leading: const Icon(Icons.cloud_upload_outlined),
-                      title: const Text('Sao lưu ngay'),
-                      subtitle: const Text('Đẩy dữ liệu lên cloud'),
-                      onTap: () async {
-                        Navigator.of(sheetContext).pop();
-                        _performBackup(context, syncService);
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.cloud_download_outlined),
-                      title: const Text('Khôi phục từ cloud'),
-                      subtitle: const Text('Kéo dữ liệu từ cloud về'),
-                      onTap: () async {
-                        Navigator.of(sheetContext).pop();
-                        _performRestore(context, syncService);
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.logout, color: Colors.red),
-                      title: const Text(
-                        'Đăng xuất',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                      onTap: () async {
-                        Navigator.of(sheetContext).pop();
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Xác nhận đăng xuất'),
-                            content: const Text(
-                              'Dữ liệu local vẫn được lưu giữ. Bạn có chắc muốn đăng xuất?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(false),
-                                child: const Text('Hủy'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(true),
-                                child: const Text('Đăng xuất'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true && context.mounted) {
-                          await authVM.logout();
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              );
-            } else {
-              return SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.login),
-                      title: const Text('Đăng nhập / Đăng ký'),
-                      subtitle: const Text('Sao lưu dữ liệu lên cloud'),
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              );
-            }
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _performBackup(
-    BuildContext context,
-    SyncService syncService,
-  ) async {
-    try {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Đang sao lưu...')));
-
-      await syncService.backupNow();
-
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✓ Sao lưu thành công'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi sao lưu: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  Future<void> _performRestore(
-    BuildContext context,
-    SyncService syncService,
-  ) async {
-    try {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Đang khôi phục...')));
-
-      await syncService.restoreFromCloud();
-
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✓ Khôi phục thành công'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi khôi phục: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final viewModel = Provider.of<PantryViewModel>(context);
     final authViewModel = Provider.of<AuthViewModel>(context);
-    final syncService = Provider.of<SyncService>(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản lý tủ bếp'),
         backgroundColor: const Color(0xFF9575CD),
         actions: [
-          Stack(
-            children: [
-              IconButton(
-                tooltip: 'Tài khoản',
-                icon: const Icon(Icons.account_circle),
-                onPressed: () {
-                  _showAccountMenu(context, authViewModel, syncService);
-                },
-              ),
-              if (authViewModel.isLoggedIn)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      shape: BoxShape.circle,
+          PopupMenuButton<String>(
+            tooltip: 'Tài khoản',
+            icon: Stack(
+              alignment: Alignment.topRight,
+              children: [
+                const Icon(Icons.account_circle_outlined),
+                if (authViewModel.isLoggedIn)
+                  const Positioned(
+                    right: 0,
+                    top: 0,
+                    child: CircleAvatar(
+                      radius: 4,
+                      backgroundColor: Colors.green,
                     ),
                   ),
+              ],
+            ),
+            onSelected: (value) async {
+              if (value == 'login') {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+              } else if (value == 'logout') {
+                await authViewModel.logout();
+              }
+            },
+            itemBuilder: (context) {
+              if (authViewModel.isLoggedIn) {
+                return [
+                  PopupMenuItem<String>(
+                    enabled: false,
+                    value: 'email',
+                    child: Text(authViewModel.userEmail ?? 'Đã đăng nhập'),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem<String>(
+                    value: 'logout',
+                    child: Text('Đăng xuất'),
+                  ),
+                ];
+              }
+
+              return const [
+                PopupMenuItem<String>(
+                  value: 'login',
+                  child: Text('Đăng nhập / Đăng ký'),
                 ),
-            ],
+              ];
+            },
           ),
           IconButton(
             tooltip: 'Test notification',
@@ -536,10 +253,16 @@ class PantryScreen extends StatelessWidget {
                                           AddItemBottomSheet(
                                             initialItem: item,
                                             onAdd: (updatedItem) async {
-                                              return await viewModel.updateItem(
-                                                item.itemId,
-                                                updatedItem,
-                                              );
+                                              final realIndex = viewModel.items
+                                                  .indexOf(item);
+                                              if (realIndex != -1) {
+                                                return await viewModel
+                                                    .updateItem(
+                                                      realIndex,
+                                                      updatedItem,
+                                                    );
+                                              }
+                                              return false;
                                             },
                                           ),
                                     );
@@ -548,8 +271,13 @@ class PantryScreen extends StatelessWidget {
                                 PopupMenuButton<String>(
                                   icon: const Icon(Icons.more_vert, size: 18),
                                   onSelected: (value) async {
+                                    final realIndex = viewModel.items.indexOf(
+                                      item,
+                                    );
+                                    if (realIndex == -1) return;
                                     if (value == 'half') {
-                                      final current = item;
+                                      final current =
+                                          viewModel.items[realIndex];
                                       double newQty = (current.quantity / 2);
                                       if (newQty % 1 == 0) {
                                         newQty = newQty.toInt().toDouble();
@@ -560,21 +288,20 @@ class PantryScreen extends StatelessWidget {
                                       }
                                       if (newQty > 0) {
                                         await viewModel.updateItem(
-                                          item.itemId,
+                                          realIndex,
                                           PantryItemModel(
                                             name: current.name,
                                             quantity: newQty,
                                             unit: current.unit,
                                             purchaseDate: current.purchaseDate,
                                             expiryDate: current.expiryDate,
-                                            itemId: item.itemId,
                                           ),
                                         );
                                       } else {
-                                        await viewModel.deleteItem(item.itemId);
+                                        await viewModel.deleteItem(realIndex);
                                       }
                                     } else if (value == 'all') {
-                                      await viewModel.deleteItem(item.itemId);
+                                      await viewModel.deleteItem(realIndex);
                                     } else if (value == 'delete') {
                                       final confirm = await showDialog<bool>(
                                         context: context,
@@ -603,7 +330,7 @@ class PantryScreen extends StatelessWidget {
                                         ),
                                       );
                                       if (confirm == true) {
-                                        await viewModel.deleteItem(item.itemId);
+                                        await viewModel.deleteItem(realIndex);
                                       }
                                     }
                                   },
@@ -664,10 +391,23 @@ class PantryScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF9575CD),
         onPressed: () async {
-          await _showAddOptions(context, viewModel);
+          await showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            builder: (sheetContext) => AddItemBottomSheet(
+              onAdd: (item) async {
+                final success = await viewModel.addItem(item);
+                return success;
+              },
+            ),
+          );
         },
         child: const Icon(Icons.add),
       ),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 0),
     );
   }
 

@@ -19,9 +19,9 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: 'Test Notification');
+    _titleController = TextEditingController(text: 'Kiểm thử thông báo');
     _bodyController = TextEditingController(
-      text: 'This is a test notification',
+      text: 'Đây là một thông báo kiểm thử',
     );
     _payloadController = TextEditingController(text: 'route:pantry');
   }
@@ -37,7 +37,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('🧪 Notification Test')),
+      appBar: AppBar(title: const Text('🧪 Kiểm thử thông báo')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -47,18 +47,18 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
             TextField(
               controller: _titleController,
               decoration: const InputDecoration(
-                labelText: 'Title',
+                labelText: 'Tiêu đề',
                 border: OutlineInputBorder(),
-                hintText: 'Notification title',
+                hintText: 'Tiêu đề thông báo',
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _bodyController,
               decoration: const InputDecoration(
-                labelText: 'Body',
+                labelText: 'Nội dung',
                 border: OutlineInputBorder(),
-                hintText: 'Notification body',
+                hintText: 'Nội dung thông báo',
               ),
               maxLines: 2,
             ),
@@ -66,9 +66,9 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
             TextField(
               controller: _payloadController,
               decoration: const InputDecoration(
-                labelText: 'Payload / Deep Link',
+                labelText: 'Tải trọng / Liên kết sâu',
                 border: OutlineInputBorder(),
-                hintText: 'e.g., route:pantry?ingredient=milk',
+                hintText: 'Ví dụ: route:pantry?ingredient=milk',
               ),
               maxLines: 2,
             ),
@@ -76,7 +76,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
 
             // Predefined test cases
             Text(
-              'Quick Test Cases',
+              'Trường hợp Kiểm thử Nhanh',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
@@ -89,7 +89,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '🥫 Pantry Tests',
+                      '🥫 Kiểm thử Tủ bếp',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -101,7 +101,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                           ingredient: 'sữa',
                         ),
                       ),
-                      child: const Text('Send: Milk Expiring'),
+                      child: const Text('Gửi: Sữa sắp hết hạn'),
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
@@ -113,7 +113,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                           isExpired: true,
                         ),
                       ),
-                      child: const Text('Send: Cheese Expired'),
+                      child: const Text('Gửi: Mặt nạ đã hết hạn'),
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton(
@@ -122,7 +122,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                         body: 'Tất cả hàng hóa vẫn tốt',
                         payload: DeepLinkHandler.buildPantryPayload(),
                       ),
-                      child: const Text('Send: Check Complete'),
+                      child: const Text('Gửi: Kiểm tra Hoàn tất'),
                     ),
                   ],
                 ),
@@ -138,7 +138,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '🛒 Shopping List Tests',
+                      '🛒 Kiểm thử Danh sách mua',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -148,7 +148,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                         body: 'Bạn có 5 mục trong danh sách',
                         payload: DeepLinkHandler.buildShoppingListPayload(),
                       ),
-                      child: const Text('Send: Shopping List'),
+                      child: const Text('Gửi: Danh sách mua'),
                     ),
                   ],
                 ),
@@ -164,7 +164,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '👨‍🍳 Recipes Tests',
+                      '👨‍🍳 Kiểm thử Công thức',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -176,7 +176,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                           recipeId: '123',
                         ),
                       ),
-                      child: const Text('Send: New Recipe'),
+                      child: const Text('Gửi: Công thức mới'),
                     ),
                   ],
                 ),
@@ -192,7 +192,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '📅 Meal Planner Tests',
+                      '📅 Kiểm thử Lên menu',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -204,7 +204,7 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                           mealId: '456',
                         ),
                       ),
-                      child: const Text('Send: Meal Reminder'),
+                      child: const Text('Gửi: Nhắc nhở bữa ăn'),
                     ),
                   ],
                 ),
@@ -214,14 +214,14 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
 
             // Custom notification button
             Text(
-              'Custom Notification',
+              'Thông báo tùy chỉnh',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: _sendCustomNotification,
               icon: const Icon(Icons.send),
-              label: const Text('Send Custom Notification'),
+              label: const Text('Gửi thông báo tùy chỉnh'),
             ),
             const SizedBox(height: 12),
             ElevatedButton(
@@ -230,14 +230,12 @@ class _NotificationTestScreenState extends State<NotificationTestScreen> {
                 await NotificationService().cancelAllNotifications();
                 if (mounted) {
                   messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('All notifications cancelled'),
-                    ),
+                    const SnackBar(content: Text('Tất cả thông báo đã bị hủy')),
                   );
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Cancel All Notifications'),
+              child: const Text('Hủy tất cả thông báo'),
             ),
           ],
         ),

@@ -44,22 +44,38 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Firebase Configuration (SENSITIVE - do not commit)
-lib/firebase_options.dart
-android/app/google-services.json
-ios/Runner/GoogleService-Info.plist
-
-# Android signing keys (SENSITIVE)
-android/app/keystore.jks
-android/key.properties
-android/app/release.jks
-android/app/debug.keystore
-
-# Local environment files
+# Security & Credentials (IMPORTANT: Never commit these!)
+google-services.json
+firebase_options.dart
+*.keystore
+*.jks
+key.properties
+local.properties
 .env
 .env.local
-local.properties
+.env.*.local
 
-# IDE settings
-.vscode/launch.json
-.vscode/settings.json
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+
+# macOS
+macos/Pods/
+macos/Podfile.lock
+
+# Generated sources
+lib/main.reflectable.dart
+lib/main.reflection.dart
+
+# Misc
+amplify_outputs/
+dart_define_env/
+

@@ -3,10 +3,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'route_names.dart';
 import '../core/widgets/notification_test_screen.dart';
-import '../core/services/scanner/scanner_service.dart';
+import '../core/widgets/bottom_nav_bar.dart';
 import '../features/pantry/views/pantry_screen.dart' as pantry_view;
-import '../features/pantry/views/receipt_scanner_screen.dart' as pantry_receipt;
 import '../features/pantry/view_models/pantry_view_model.dart';
+import '../features/recipes/views/recipe_list_screen.dart';
+import '../features/recipes/views/recipe_detail_screen.dart';
 
 // Placeholder Screens (các thành viên khác sẽ thay thế)
 class MealPlannerScreen extends StatelessWidget {
@@ -16,16 +17,17 @@ class MealPlannerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Meal Planner')),
+      appBar: AppBar(title: const Text('Lên menu')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Meal Planner Screen'),
-            if (mealId != null) Text('Meal ID: $mealId'),
+            const Text('Màn hình lên menu'),
+            if (mealId != null) Text('Mã ID: $mealId'),
           ],
         ),
       ),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 2),
     );
   }
 }
@@ -36,8 +38,8 @@ class CalendarScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Calendar')),
-      body: const Center(child: Text('Calendar Screen')),
+      appBar: AppBar(title: const Text('Lịch')),
+      body: const Center(child: Text('Màn hình lịch')),
     );
   }
 }
@@ -49,8 +51,8 @@ class MealDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Meal Details')),
-      body: Center(child: Text('Meal Details - ID: $mealId')),
+      appBar: AppBar(title: const Text('Chi tiết bữa ăn')),
+      body: Center(child: Text('Chi tiết bữa ăn - Mã ID: $mealId')),
     );
   }
 }
@@ -62,13 +64,13 @@ class AddItemScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Item')),
+      appBar: AppBar(title: const Text('Thêm hàng')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Add Item Screen'),
-            if (ingredient != null) Text('Ingredient: $ingredient'),
+            const Text('Màn hình thêm hàng'),
+            if (ingredient != null) Text('Nguyên liệu: $ingredient'),
           ],
         ),
       ),
@@ -76,27 +78,14 @@ class AddItemScreen extends StatelessWidget {
   }
 }
 
-class RecipesListScreen extends StatelessWidget {
-  const RecipesListScreen({super.key});
+class ReceiptScannerScreen extends StatelessWidget {
+  const ReceiptScannerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Recipes')),
-      body: const Center(child: Text('Recipes List Screen')),
-    );
-  }
-}
-
-class RecipeDetailsScreen extends StatelessWidget {
-  final String recipeId;
-  const RecipeDetailsScreen({required this.recipeId, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Recipe Details')),
-      body: Center(child: Text('Recipe Details - ID: $recipeId')),
+      appBar: AppBar(title: const Text('Quét hoá đơn')),
+      body: const Center(child: Text('Màn hình quét hoá đơn')),
     );
   }
 }
@@ -107,8 +96,9 @@ class ShoppingListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Shopping List')),
-      body: const Center(child: Text('Shopping List Screen')),
+      appBar: AppBar(title: const Text('Danh sách mua sắm')),
+      body: const Center(child: Text('Màn hình danh sách mua sắm')),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 3),
     );
   }
 }
@@ -120,8 +110,8 @@ class ShoppingItemDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Shopping Item Details')),
-      body: Center(child: Text('Shopping Item Details - ID: $itemId')),
+      appBar: AppBar(title: const Text('Chi tiết mục mua sắm')),
+      body: Center(child: Text('Chi tiết mục - Mã ID: $itemId')),
     );
   }
 }
@@ -132,30 +122,30 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Fridge to Fork')),
+      appBar: AppBar(title: const Text('Tủ lạnh Đến Bàn Ăn')),
       body: Center(
         child: ListView(
           shrinkWrap: true,
           children: [
             ListTile(
-              title: const Text('Meal Planner'),
+              title: const Text('Lên menu'),
               onTap: () => context.go(RouteNames.mealPlanner),
             ),
             ListTile(
-              title: const Text('Pantry'),
+              title: const Text('Tủ bếp'),
               onTap: () => context.go(RouteNames.pantryScreen),
             ),
             ListTile(
-              title: const Text('Recipes'),
+              title: const Text('Công thức'),
               onTap: () => context.go(RouteNames.recipesListScreen),
             ),
             ListTile(
-              title: const Text('Shopping List'),
+              title: const Text('Danh sách mua'),
               onTap: () => context.go(RouteNames.shoppingListScreen),
             ),
             const Divider(),
             ListTile(
-              title: const Text('🧪 Test Notifications'),
+              title: const Text('🧪 Kiểm thử thông báo'),
               onTap: () => context.go('/test-notifications'),
             ),
           ],
@@ -169,8 +159,8 @@ class HomeScreen extends StatelessWidget {
 final appRouter = GoRouter(
   initialLocation: RouteNames.pantryScreen,
   errorBuilder: (context, state) => Scaffold(
-    appBar: AppBar(title: const Text('Error')),
-    body: Center(child: Text('Error: ${state.error}')),
+    appBar: AppBar(title: const Text('Lỗi')),
+    body: Center(child: Text('Lỗi: ${state.error}')),
   ),
   routes: [
     // Root/Home
@@ -229,10 +219,7 @@ final appRouter = GoRouter(
         GoRoute(
           path: 'receipt-scanner',
           name: 'receiptScanner',
-          builder: (context, state) => Provider<ScannerService>(
-            create: (_) => ScannerService(),
-            child: const pantry_receipt.ReceiptScannerScreen(),
-          ),
+          builder: (context, state) => const ReceiptScannerScreen(),
         ),
       ],
     ),
@@ -241,14 +228,22 @@ final appRouter = GoRouter(
     GoRoute(
       path: RouteNames.recipesListScreen,
       name: 'recipesList',
-      builder: (context, state) => const RecipesListScreen(),
+      builder: (context, state) => const RecipeListScreen(),
       routes: [
         GoRoute(
           path: 'details/:recipeId',
           name: 'recipeDetails',
           builder: (context, state) {
-            final recipeId = state.pathParameters['recipeId'] ?? '';
-            return RecipeDetailsScreen(recipeId: recipeId);
+            final String recipeIdParam = state.pathParameters['recipeId'] ?? '';
+            final int? recipeId = int.tryParse(recipeIdParam);
+
+            if (recipeId == null) {
+              return const Scaffold(
+                body: Center(child: Text('Invalid recipe id.')),
+              );
+            }
+
+            return RecipeDetailScreen(recipeId: recipeId);
           },
         ),
       ],

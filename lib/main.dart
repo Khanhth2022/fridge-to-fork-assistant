@@ -1,36 +1,41 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'dart:io' show Platform;
 import 'features/pantry/models/pantry_item_model.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:provider/provider.dart';
-import 'features/pantry/views/pantry_screen.dart';
-import 'features/pantry/view_models/pantry_view_model.dart';
-import 'features/auth/view_models/auth_view_model.dart';
 import 'core/services/notification/notification_service.dart';
 import 'core/services/notification/background_worker.dart';
 import 'core/services/notification/expiry_notification_service.dart';
 import 'core/services/auth/auth_service.dart';
 import 'core/services/auth/auth_repository.dart';
-import 'core/services/sync/sync_service.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'features/auth/view_models/auth_view_model.dart';
+import 'routes/app_router.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await dotenv.load(fileName: '.env');
   await Future.wait([
     Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform),
     _initHive(),
   ]);
   await NotificationService().initialize();
 
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    await BackgroundWorker.initialize(debugMode: false);
+    await BackgroundWorker.scheduleCheckExpiredItems();
+    await BackgroundWorker.schedulePantrySyncTask();
+  }
+
+  await ExpiryNotificationService.checkAndNotifyExpiringItems();
+
   runApp(
     MultiProvider(
       providers: [
-        // Auth services
         Provider<AuthService>(create: (_) => AuthService()),
         ProxyProvider<AuthService, AuthRepository>(
           create: (context) =>
@@ -38,7 +43,6 @@ void main() async {
           update: (context, authService, previous) =>
               AuthRepository(authService: authService),
         ),
-        // Auth ViewModel
         ChangeNotifierProxyProvider<AuthRepository, AuthViewModel>(
           create: (context) => AuthViewModel(
             authService: context.read<AuthService>(),
@@ -49,36 +53,10 @@ void main() async {
             authRepository: authRepository,
           ),
         ),
-        // Sync Service
-        ProxyProvider<AuthService, SyncService>(
-          create: (context) =>
-              SyncService(authService: context.read<AuthService>()),
-          update: (context, authService, previous) =>
-              SyncService(authService: authService),
-        ),
-        // Pantry ViewModel
-        ChangeNotifierProvider(create: (_) => PantryViewModel()),
       ],
       child: const MyApp(),
     ),
   );
-
-  // Run non-critical background setup after UI is displayed.
-  unawaited(_runPostLaunchTasks());
-}
-
-Future<void> _runPostLaunchTasks() async {
-  try {
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      await BackgroundWorker.initialize(debugMode: false);
-      await BackgroundWorker.scheduleCheckExpiredItems();
-      await BackgroundWorker.schedulePantrySyncTask();
-    }
-
-    await ExpiryNotificationService.checkAndNotifyExpiringItems();
-  } catch (e) {
-    debugPrint('Post launch task error: $e');
-  }
 }
 
 Future<void> _initHive() async {
@@ -86,24 +64,18 @@ Future<void> _initHive() async {
   if (!Hive.isAdapterRegistered(0)) {
     Hive.registerAdapter(PantryItemModelAdapter());
   }
-  try {
-    await Hive.openBox<PantryItemModel>('pantry_items');
-  } catch (e) {
-    debugPrint('Hive pantry_items open failed, recreating box: $e');
-    await Hive.deleteBoxFromDisk('pantry_items');
-    await Hive.openBox<PantryItemModel>('pantry_items');
-  }
+  await Hive.openBox<PantryItemModel>('pantry_items');
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'Bếp Trợ Lý',
       theme: ThemeData(primarySwatch: Colors.green),
-      home: const PantryScreen(),
+      routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
