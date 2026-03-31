@@ -3,6 +3,22 @@ import 'package:hive/hive.dart';
 import '../../../features/pantry/models/pantry_item_model.dart';
 import '../auth/auth_service.dart';
 
+enum RestoreConflictResolution { preferLocal, preferCloud }
+
+class RestoreConflictInfo {
+  final String itemId;
+  final String itemName;
+  final int localUpdatedAtUtcMs;
+  final int cloudUpdatedAtUtcMs;
+
+  const RestoreConflictInfo({
+    required this.itemId,
+    required this.itemName,
+    required this.localUpdatedAtUtcMs,
+    required this.cloudUpdatedAtUtcMs,
+  });
+}
+
 class SyncService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final AuthService authService;
@@ -74,8 +90,54 @@ class SyncService {
     }
   }
 
-  // Restore from Firestore (pull newer items from cloud)
-  Future<void> restoreFromCloud() async {
+  Future<List<RestoreConflictInfo>> getRestoreConflicts() async {
+    if (!authService.isLoggedIn) {
+      throw 'Vui lòng đăng nhập để kiểm tra xung đột dữ liệu';
+    }
+
+    try {
+      final box = await Hive.openBox<PantryItemModel>(_pantryBoxName);
+      final ref = _getUserPantryRef();
+      final snapshot = await ref.get();
+      final localItems = box.values.toList();
+
+      final List<RestoreConflictInfo> conflicts = <RestoreConflictInfo>[];
+
+      for (final doc in snapshot.docs) {
+        final cloudItem = _fromFirestore(doc.data());
+        final localItemIndex = localItems.indexWhere(
+          (item) => item.itemId == cloudItem.itemId,
+        );
+
+        if (localItemIndex == -1) {
+          continue;
+        }
+
+        final localItem = localItems[localItemIndex];
+        if (_isDifferentItem(localItem, cloudItem) &&
+            localItem.updatedAtUtcMs != cloudItem.updatedAtUtcMs) {
+          conflicts.add(
+            RestoreConflictInfo(
+              itemId: localItem.itemId,
+              itemName: localItem.name,
+              localUpdatedAtUtcMs: localItem.updatedAtUtcMs,
+              cloudUpdatedAtUtcMs: cloudItem.updatedAtUtcMs,
+            ),
+          );
+        }
+      }
+
+      return conflicts;
+    } catch (e) {
+      throw 'Lỗi khi kiểm tra xung đột: $e';
+    }
+  }
+
+  // Restore from Firestore with selectable conflict strategy
+  Future<void> restoreFromCloud({
+    RestoreConflictResolution conflictResolution =
+        RestoreConflictResolution.preferLocal,
+  }) async {
     if (!authService.isLoggedIn) {
       throw 'Vui lòng đăng nhập để khôi phục dữ liệu';
     }
@@ -86,13 +148,14 @@ class SyncService {
 
       // Get all items from cloud
       final snapshot = await ref.get();
+      final localItems = box.values.toList();
 
       for (var doc in snapshot.docs) {
         final cloudData = doc.data();
         final cloudItem = _fromFirestore(cloudData);
 
         // Find local item with same ID
-        final localItemIndex = box.values.toList().indexWhere(
+        final localItemIndex = localItems.indexWhere(
           (item) => item.itemId == cloudItem.itemId,
         );
 
@@ -102,6 +165,20 @@ class SyncService {
         } else {
           // Local has it, check timestamps
           final localItem = box.getAt(localItemIndex)!;
+
+          final hasConflict =
+              _isDifferentItem(localItem, cloudItem) &&
+              localItem.updatedAtUtcMs != cloudItem.updatedAtUtcMs;
+
+          if (hasConflict) {
+            if (conflictResolution == RestoreConflictResolution.preferCloud) {
+              await box.putAt(
+                localItemIndex,
+                cloudItem.copyWith(isDirty: false),
+              );
+            }
+            continue;
+          }
 
           if (cloudItem.updatedAtUtcMs > localItem.updatedAtUtcMs &&
               !localItem.isDirty) {
@@ -147,6 +224,19 @@ class SyncService {
   Future<void> clearAllLocalData() async {
     final box = await Hive.openBox<PantryItemModel>(_pantryBoxName);
     await box.clear();
+  }
+
+  bool _isDifferentItem(PantryItemModel localItem, PantryItemModel cloudItem) {
+    return localItem.name.trim().toLowerCase() !=
+            cloudItem.name.trim().toLowerCase() ||
+        localItem.quantity != cloudItem.quantity ||
+        localItem.unit.trim().toLowerCase() !=
+            cloudItem.unit.trim().toLowerCase() ||
+        localItem.purchaseDate.millisecondsSinceEpoch !=
+            cloudItem.purchaseDate.millisecondsSinceEpoch ||
+        localItem.expiryDate.millisecondsSinceEpoch !=
+            cloudItem.expiryDate.millisecondsSinceEpoch ||
+        localItem.deletedAtUtcMs != cloudItem.deletedAtUtcMs;
   }
 }
 

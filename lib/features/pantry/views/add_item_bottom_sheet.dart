@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import '../models/pantry_item_model.dart';
-import '../view_models/pantry_view_model.dart';
 
 class AddItemBottomSheet extends StatefulWidget {
   final Future<bool> Function(PantryItemModel) onAdd;
   final PantryItemModel? initialItem;
-  const AddItemBottomSheet({Key? key, required this.onAdd, this.initialItem})
-    : super(key: key);
+  final List<String> existingItemNames;
+
+  const AddItemBottomSheet({
+    Key? key,
+    required this.onAdd,
+    this.initialItem,
+    this.existingItemNames = const <String>[],
+  }) : super(key: key);
 
   @override
   State<AddItemBottomSheet> createState() => _AddItemBottomSheetState();
@@ -22,6 +26,7 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
   String? _purchaseDateError;
   String? _expiryDateError;
   bool _isValid = false;
+  bool _showValidationErrors = false;
   DateTime? _purchaseDate;
   DateTime? _expiryDate;
   late final TextEditingController _nameController;
@@ -43,7 +48,6 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
     );
     _purchaseDate = widget.initialItem?.purchaseDate;
     _expiryDate = widget.initialItem?.expiryDate;
-    _nameController.addListener(_validate);
 
     _purchaseDateController = TextEditingController(
       text: _purchaseDate != null ? _formatDate(_purchaseDate!) : '',
@@ -67,17 +71,19 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
     if (name.isEmpty) {
       _nameError = 'Vui lòng nhập tên nguyên liệu';
     } else {
-      // Validate trùng tên khi nhập
-      final pantryViewModel = context.read<PantryViewModel>();
-      final exists = pantryViewModel.items.any((e) {
-        final isSameName = e.name.trim().toLowerCase() == name.toLowerCase();
-        // Nếu đang edit, bỏ qua chính nó
-        if (widget.initialItem != null &&
-            e.name.trim().toLowerCase() ==
-                widget.initialItem!.name.trim().toLowerCase()) {
+      final String normalizedName = name.toLowerCase();
+      final String? normalizedInitialName = widget.initialItem?.name
+          .trim()
+          .toLowerCase();
+      final exists = widget.existingItemNames.any((existingName) {
+        final normalizedExistingName = existingName.trim().toLowerCase();
+        if (normalizedExistingName != normalizedName) {
           return false;
         }
-        return isSameName;
+
+        // Nếu đang sửa và tên giữ nguyên thì không tính là trùng.
+        return normalizedInitialName == null ||
+            normalizedExistingName != normalizedInitialName;
       });
       if (exists) {
         _nameError = 'Nguyên liệu này đã tồn tại!';
@@ -115,7 +121,6 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
 
   @override
   void dispose() {
-    _nameController.removeListener(_validate);
     _quantityController.dispose();
     _nameController.dispose();
     _unitController.dispose();
@@ -156,7 +161,7 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
               decoration: InputDecoration(
                 labelText: 'Tên nguyên liệu',
                 border: const OutlineInputBorder(),
-                errorText: _nameError,
+                errorText: _showValidationErrors ? _nameError : null,
               ),
             ),
             const SizedBox(height: 12),
@@ -178,7 +183,7 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                     decoration: InputDecoration(
                       labelText: 'Số lượng',
                       border: const OutlineInputBorder(),
-                      errorText: _quantityError,
+                      errorText: _showValidationErrors ? _quantityError : null,
                     ),
                   ),
                 ),
@@ -190,7 +195,7 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                     decoration: InputDecoration(
                       labelText: 'Đơn vị',
                       border: const OutlineInputBorder(),
-                      errorText: _unitError,
+                      errorText: _showValidationErrors ? _unitError : null,
                     ),
                   ),
                 ),
@@ -224,7 +229,9 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                         decoration: InputDecoration(
                           labelText: 'Ngày mua',
                           border: const OutlineInputBorder(),
-                          errorText: _purchaseDateError,
+                          errorText: _showValidationErrors
+                              ? _purchaseDateError
+                              : null,
                         ),
                       ),
                     ),
@@ -257,7 +264,9 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                         decoration: InputDecoration(
                           labelText: 'Hạn sử dụng',
                           border: const OutlineInputBorder(),
-                          errorText: _expiryDateError,
+                          errorText: _showValidationErrors
+                              ? _expiryDateError
+                              : null,
                         ),
                       ),
                     ),
@@ -281,23 +290,16 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                   ),
                 ),
                 onPressed: () async {
-                  final quantityText = _quantityController.text.trim();
-                  final quantity = double.tryParse(quantityText) ?? 0;
-                  if (quantityText.isEmpty ||
-                      !RegExp(
-                        r'^(?:[1-9]\d*|0)?(?:\.[0-9]+)?$',
-                      ).hasMatch(quantityText) ||
-                      quantity <= 0) {
-                    setState(() {
-                      _quantityError =
-                          'Chỉ nhập số dương lớn hơn 0, không dấu cách, không dấu trừ';
-                    });
-                    return;
-                  }
                   setState(() {
-                    _quantityError = null;
+                    _showValidationErrors = true;
                   });
                   _validate();
+                  if (!_isValid) {
+                    return;
+                  }
+
+                  final quantity =
+                      double.tryParse(_quantityController.text.trim()) ?? 0;
                   if (_isValid) {
                     final item = PantryItemModel(
                       name: _nameController.text.trim(),
@@ -306,13 +308,32 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                       purchaseDate: _purchaseDate!,
                       expiryDate: _expiryDate!,
                     );
-                    final result = await widget.onAdd(item);
-                    if (result == true) {
-                      Navigator.pop(context, item);
-                    } else {
+                    try {
+                      final result = await widget.onAdd(item);
+                      if (!context.mounted) {
+                        return;
+                      }
+
+                      if (result == true) {
+                        Navigator.pop(context, item);
+                        return;
+                      }
+
                       setState(() {
                         _nameError = 'Nguyên liệu này đã tồn tại!';
+                        _isValid = false;
                       });
+                    } catch (_) {
+                      if (!context.mounted) {
+                        return;
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Không thể thêm nguyên liệu. Vui lòng thử lại.',
+                          ),
+                        ),
+                      );
                     }
                   }
                 },

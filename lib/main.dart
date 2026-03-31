@@ -12,6 +12,7 @@ import 'core/services/notification/background_worker.dart';
 import 'core/services/notification/expiry_notification_service.dart';
 import 'core/services/auth/auth_service.dart';
 import 'core/services/auth/auth_repository.dart';
+import 'core/services/sync/sync_service.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'routes/app_router.dart';
 import 'firebase_options.dart';
@@ -52,6 +53,12 @@ void main() async {
             authService: context.read<AuthService>(),
             authRepository: authRepository,
           ),
+        ),
+        ProxyProvider<AuthService, SyncService>(
+          create: (context) =>
+              SyncService(authService: context.read<AuthService>()),
+          update: (context, authService, previous) =>
+              SyncService(authService: authService),
         ),
       ],
       child: const MyApp(),

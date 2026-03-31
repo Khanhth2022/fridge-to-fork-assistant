@@ -7,11 +7,85 @@ import 'scanned_items_review_sheet.dart';
 import '../../../core/widgets/notification_test_screen.dart';
 import '../../../core/widgets/bottom_nav_bar.dart';
 import '../../../core/services/scanner/scanner_service.dart';
+import '../../../core/services/sync/sync_service.dart';
 import 'receipt_scanner_screen.dart';
 import '../../../features/auth/view_models/auth_view_model.dart';
 import '../../../features/auth/views/login_screen.dart';
 
 class PantryScreen extends StatelessWidget {
+  Future<RestoreConflictResolution?> _askConflictResolution(
+    BuildContext context,
+    int conflictCount,
+  ) async {
+    return showDialog<RestoreConflictResolution>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Phát hiện xung đột dữ liệu'),
+          content: Text(
+            'Có $conflictCount mục khác nhau giữa máy và Firebase. Bạn muốn ưu tiên nguồn nào khi khôi phục?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Hủy'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(RestoreConflictResolution.preferLocal),
+              child: const Text('Giữ dữ liệu local'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(RestoreConflictResolution.preferCloud),
+              child: const Text('Lấy dữ liệu Firebase'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _runSyncAction({
+    required BuildContext context,
+    required Future<void> Function() action,
+    required String successMessage,
+  }) async {
+    bool isDialogOpen = false;
+    try {
+      isDialogOpen = true;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      await action();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(successMessage)));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        String message = e.toString();
+        if (message.toLowerCase().contains('not authenticated')) {
+          message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (isDialogOpen && context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
+
   Future<void> _openManualAddSheet(
     BuildContext context,
     PantryViewModel viewModel,
@@ -23,6 +97,7 @@ class PantryScreen extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) => AddItemBottomSheet(
+        existingItemNames: viewModel.items.map((e) => e.name).toList(),
         onAdd: (item) async {
           final success = await viewModel.addItem(item);
           return success;
@@ -242,6 +317,83 @@ class PantryScreen extends StatelessWidget {
                 ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
               } else if (value == 'logout') {
                 await authViewModel.logout();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('Đã đăng xuất')));
+                }
+              } else if (value == 'backup') {
+                if (!authViewModel.isLoggedIn) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Vui lòng đăng nhập để sao lưu dữ liệu'),
+                      ),
+                    );
+                  }
+                  return;
+                }
+
+                final SyncService syncService = context.read<SyncService>();
+                await _runSyncAction(
+                  context: context,
+                  action: () => syncService.backupNow(),
+                  successMessage: 'Sao lưu Firebase thành công',
+                );
+              } else if (value == 'restore') {
+                if (!authViewModel.isLoggedIn) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Vui lòng đăng nhập để khôi phục dữ liệu',
+                        ),
+                      ),
+                    );
+                  }
+                  return;
+                }
+
+                final SyncService syncService = context.read<SyncService>();
+                final conflicts = await syncService.getRestoreConflicts();
+                RestoreConflictResolution? resolution;
+
+                if (conflicts.isNotEmpty) {
+                  if (!context.mounted) {
+                    return;
+                  }
+                  resolution = await _askConflictResolution(
+                    context,
+                    conflicts.length,
+                  );
+
+                  if (resolution == null) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Đã hủy khôi phục dữ liệu'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                }
+
+                if (!context.mounted) {
+                  return;
+                }
+
+                await _runSyncAction(
+                  context: context,
+                  action: () async {
+                    await syncService.restoreFromCloud(
+                      conflictResolution:
+                          resolution ?? RestoreConflictResolution.preferLocal,
+                    );
+                    await viewModel.loadItems();
+                  },
+                  successMessage: 'Khôi phục dữ liệu từ Firebase thành công',
+                );
               }
             },
             itemBuilder: (context) {
@@ -251,6 +403,15 @@ class PantryScreen extends StatelessWidget {
                     enabled: false,
                     value: 'email',
                     child: Text(authViewModel.userEmail ?? 'Đã đăng nhập'),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem<String>(
+                    value: 'backup',
+                    child: Text('Sao lưu lên Firebase'),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'restore',
+                    child: Text('Khôi phục từ Firebase'),
                   ),
                   const PopupMenuDivider(),
                   const PopupMenuItem<String>(
@@ -390,6 +551,9 @@ class PantryScreen extends StatelessWidget {
                                       builder: (sheetContext) =>
                                           AddItemBottomSheet(
                                             initialItem: item,
+                                            existingItemNames: viewModel.items
+                                                .map((e) => e.name)
+                                                .toList(),
                                             onAdd: (updatedItem) async {
                                               final realIndex = viewModel.items
                                                   .indexOf(item);
