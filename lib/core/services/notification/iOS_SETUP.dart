@@ -1,10 +1,10 @@
 // ignore_for_file: file_names, dangling_library_doc_comments
 
 /// iOS Notification Configuration Guide
-/// 
+///
 /// 📋 Bước 1: Update Info.plist
 /// File: ios/Runner/Info.plist
-/// 
+///
 /// Thêm hoặc kiểm tra:
 /// ```xml
 /// <key>UIBackgroundModes</key>
@@ -13,15 +13,15 @@
 ///     <string>fetch</string>
 /// </array>
 /// ```
-/// 
+///
 /// 📋 Bước 2: Update Podfile
 /// File: ios/Podfile
-/// 
+///
 /// Đảm bảo platform:
 /// ```ruby
 /// platform :ios, '12.0'
 /// ```
-/// 
+///
 /// 📋 Bước 3: Update Runner.xcodeproj
 /// 1. Mở ios/Runner.xcworkspace (KHÔNG phải .xcodeproj)
 /// 2. Chọn Runner project
@@ -33,12 +33,12 @@
 ///    - Thêm: "Push Notifications"
 ///    - Thêm: "Background Modes"
 ///    - Checked: "Remote notifications"
-/// 
+///
 /// 📋 Bước 4: Cấu hình requestPermissions trong AppDelegate
 /// File: ios/Runner/GeneratedPluginRegistrant.m
-/// 
+///
 /// NotificationService sẽ tự động yêu cầu permissions
-/// 
+///
 /// 📋 Bước 5: Lệnh CLI
 /// ```bash
 /// cd ios
@@ -49,9 +49,9 @@
 /// flutter clean
 /// flutter pub get
 /// ```
-/// 
+///
 ///━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/// 
+///
 /// 📝 Checklist:
 /// - [ ] Info.plist có remote-notification background mode
 /// - [ ] Podfile platform >= 12.0
@@ -61,7 +61,7 @@
 /// - [ ] Background Modes capability added
 /// - [ ] Pod install chạy
 /// - [ ] flutter clean && flutter pub get
-/// 
+///
 
 class IOSNotificationSetup {
   static const String docString = '''

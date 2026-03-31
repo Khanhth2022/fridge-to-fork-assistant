@@ -25,7 +25,9 @@ class ExpiryNotificationService {
 
     final names = expiringSoon.map((e) => e.name).take(3).join(', ');
     final remainCount = expiringSoon.length - 3;
-    final summary = remainCount > 0 ? '$names và $remainCount sản phẩm khác' : names;
+    final summary = remainCount > 0
+        ? '$names và $remainCount sản phẩm khác'
+        : names;
 
     await NotificationService().showNotification(
       id: _buildNotificationId(today),
@@ -34,7 +36,9 @@ class ExpiryNotificationService {
       payload: 'route:pantry',
     );
 
-    debugPrint('Expiring items notification sent: ${expiringSoon.length} items');
+    debugPrint(
+      'Expiring items notification sent: ${expiringSoon.length} items',
+    );
     return expiringSoon.length;
   }
 
@@ -43,6 +47,8 @@ class ExpiryNotificationService {
   }
 
   static int _buildNotificationId(DateTime today) {
-    return int.parse('${today.year}${today.month.toString().padLeft(2, '0')}${today.day.toString().padLeft(2, '0')}');
+    return int.parse(
+      '${today.year}${today.month.toString().padLeft(2, '0')}${today.day.toString().padLeft(2, '0')}',
+    );
   }
 }

@@ -5,6 +5,7 @@ import '../view_models/pantry_view_model.dart';
 import '../models/pantry_item_model.dart';
 import 'add_item_bottom_sheet.dart';
 import '../../../core/widgets/notification_test_screen.dart';
+import '../../../core/widgets/bottom_nav_bar.dart';
 
 class PantryScreen extends StatelessWidget {
   Widget _buildExpiryAlert(PantryViewModel viewModel) {
@@ -45,7 +46,13 @@ class PantryScreen extends StatelessWidget {
             return Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('${item.name} sẽ hết hạn trong $daysLeft ngày.'),
+                Expanded(
+                  child: Text(
+                    '${item.name} sẽ hết hạn trong $daysLeft ngày.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 TextButton(
                   onPressed: () {
                     // TODO: Điều hướng sang màn hình gợi ý món ăn với nguyên liệu này
@@ -347,6 +354,7 @@ class PantryScreen extends StatelessWidget {
         },
         child: const Icon(Icons.add),
       ),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 0),
     );
   }
 

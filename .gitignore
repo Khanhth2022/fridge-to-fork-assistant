@@ -43,3 +43,39 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Security & Credentials (IMPORTANT: Never commit these!)
+google-services.json
+firebase_options.dart
+*.keystore
+*.jks
+key.properties
+local.properties
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+
+# macOS
+macos/Pods/
+macos/Podfile.lock
+
+# Generated sources
+lib/main.reflectable.dart
+lib/main.reflection.dart
+
+# Misc
+amplify_outputs/
+dart_define_env/
+

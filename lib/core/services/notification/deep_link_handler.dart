@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// Deep link handler for intelligent routing based on notification payload
 class DeepLinkHandler {
   /// Parse notification payload and return appropriate route
-  /// 
+  ///
   /// Payload formats:
   /// - "route:pantry" -> Navigate to pantry screen
   /// - "route:pantry?ingredient=milk" -> Navigate to add item with ingredient parameter

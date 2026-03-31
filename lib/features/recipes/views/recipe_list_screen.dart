@@ -3,6 +3,7 @@ import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.da
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/view_models/recipe_view_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/views/recipe_detail_screen.dart';
+import 'package:fridge_to_fork_assistant/core/widgets/bottom_nav_bar.dart';
 
 class RecipeListScreen extends StatefulWidget {
   const RecipeListScreen({super.key});
@@ -30,7 +31,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Goi y mon an AI')),
+      appBar: AppBar(title: const Text('Gợi ý Món Ăn')),
       body: AnimatedBuilder(
         animation: _viewModel,
         builder: (BuildContext context, _) {
@@ -45,6 +46,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
           );
         },
       ),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 1),
     );
   }
 
@@ -63,7 +65,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     if (_viewModel.recipes.isEmpty) {
       return const Center(
         child: Text(
-          'Khong tim thay cong thuc phu hop voi nguyen lieu hien tai.',
+          'Không tìm thấy công thức phù hợp với nguyên liệu hiện tại.',
         ),
       );
     }
@@ -108,17 +110,16 @@ class _PantryIngredientsBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              const Expanded(
-                child: Text(
-                  'Nguyen lieu de test API',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
+              const Text(
+                'Nguyên liệu để test API',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
               TextButton.icon(
                 onPressed: () => _showEditIngredientsDialog(context, viewModel),
                 icon: const Icon(Icons.edit, size: 16),
-                label: const Text('Sua'),
+                label: const Text('Sửa'),
               ),
             ],
           ),
@@ -148,19 +149,19 @@ class _PantryIngredientsBar extends StatelessWidget {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Cap nhat nguyen lieu'),
+          title: const Text('Cập nhật nguyên liệu'),
           content: TextField(
             controller: controller,
             maxLines: 3,
             decoration: const InputDecoration(
-              hintText: 'Vi du: chicken, tomato, egg, garlic',
+              hintText: 'Ví dụ: chicken, tomato, egg, garlic',
               border: OutlineInputBorder(),
             ),
           ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Huy'),
+              child: const Text('Hủy'),
             ),
             FilledButton(
               onPressed: () {
@@ -173,7 +174,7 @@ class _PantryIngredientsBar extends StatelessWidget {
                 vm.fetchRecipes();
                 Navigator.of(context).pop();
               },
-              child: const Text('Luu'),
+              child: const Text('Lưu'),
             ),
           ],
         );
@@ -191,33 +192,38 @@ class _FiltersBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _FilterDropdown(
-              label: 'Diet',
-              selectedValue: viewModel.selectedDiet,
-              options: RecipeViewModel.dietOptions,
-              onChanged: viewModel.updateDietFilter,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: <Widget>[
+            SizedBox(
+              width: 140,
+              child: _FilterDropdown(
+                label: 'Diet',
+                selectedValue: viewModel.selectedDiet,
+                options: RecipeViewModel.dietOptions,
+                onChanged: viewModel.updateDietFilter,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _FilterDropdown(
-              label: 'Cuisine',
-              selectedValue: viewModel.selectedCuisine,
-              options: RecipeViewModel.cuisineOptions,
-              onChanged: viewModel.updateCuisineFilter,
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 140,
+              child: _FilterDropdown(
+                label: 'Cuisine',
+                selectedValue: viewModel.selectedCuisine,
+                options: RecipeViewModel.cuisineOptions,
+                onChanged: viewModel.updateCuisineFilter,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _TimeFilterChip(viewModel: viewModel),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: viewModel.fetchRecipes,
-            child: const Text('Loc'),
-          ),
-        ],
+            const SizedBox(width: 8),
+            _TimeFilterChip(viewModel: viewModel),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: viewModel.fetchRecipes,
+              child: const Text('Lọc'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -250,7 +256,7 @@ class _FilterDropdown extends StatelessWidget {
         ),
       ),
       items: <DropdownMenuItem<String>>[
-        const DropdownMenuItem<String>(value: null, child: Text('Tat ca')),
+        const DropdownMenuItem<String>(value: null, child: Text('Tất cả')),
         ...options.map(
           (String item) =>
               DropdownMenuItem<String>(value: item, child: Text(item)),
@@ -269,7 +275,7 @@ class _TimeFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String label = viewModel.maxReadyTime == null
-        ? 'Thoi gian'
+        ? 'Thời gian'
         : '<= ${viewModel.maxReadyTime}p';
 
     return ActionChip(
@@ -287,7 +293,7 @@ class _TimeFilterChip extends StatelessWidget {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             return AlertDialog(
-              title: const Text('Gioi han thoi gian nau'),
+              title: const Text('Giới hạn thời gian nấu ăn'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
@@ -296,14 +302,14 @@ class _TimeFilterChip extends StatelessWidget {
                     max: 120,
                     divisions: 11,
                     value: tempValue,
-                    label: '${tempValue.round()} phut',
+                    label: '${tempValue.round()} phút',
                     onChanged: (double value) {
                       setState(() {
                         tempValue = value;
                       });
                     },
                   ),
-                  Text('${tempValue.round()} phut'),
+                  Text('${tempValue.round()} phút'),
                 ],
               ),
               actions: <Widget>[
@@ -312,14 +318,14 @@ class _TimeFilterChip extends StatelessWidget {
                     viewModel.updateMaxReadyTime(null);
                     Navigator.of(context).pop();
                   },
-                  child: const Text('Xoa'),
+                  child: const Text('Xóa'),
                 ),
                 FilledButton(
                   onPressed: () {
                     viewModel.updateMaxReadyTime(tempValue.round());
                     Navigator.of(context).pop();
                   },
-                  child: const Text('Ap dung'),
+                  child: const Text('Áp dụng'),
                 ),
               ],
             );

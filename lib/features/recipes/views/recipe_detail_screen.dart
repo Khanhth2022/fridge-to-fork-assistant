@@ -62,7 +62,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
           if (recipe == null) {
             return const Center(
-              child: Text('Khong tim thay thong tin mon an.'),
+              child: Text('Không tìm thấy thông tin món ăn.'),
             );
           }
 
@@ -103,12 +103,12 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                           if (recipe.readyInMinutes != null)
                             _DetailChip(
                               icon: Icons.schedule,
-                              text: '${recipe.readyInMinutes} phut',
+                              text: '${recipe.readyInMinutes} phút',
                             ),
                           if (recipe.servings != null)
                             _DetailChip(
                               icon: Icons.people,
-                              text: '${recipe.servings} khau phan',
+                              text: '${recipe.servings} khẩu phần',
                             ),
                           if (recipe.isVegan)
                             const _DetailChip(
@@ -124,16 +124,16 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                       ),
                       const SizedBox(height: 16),
                       _InfoSection(
-                        title: 'Tom tat',
+                        title: 'Tóm tắt',
                         child: Text(
-                          _stripHtmlTags(recipe.summary ?? 'Dang cap nhat...'),
+                          _stripHtmlTags(recipe.summary ?? 'Đang cập nhật...'),
                         ),
                       ),
                       const SizedBox(height: 16),
                       _InfoSection(
-                        title: 'Nguyen lieu',
+                        title: 'Nguyên liệu',
                         child: recipe.ingredients.isEmpty
-                            ? const Text('Khong co danh sach nguyen lieu.')
+                            ? const Text('Không có danh sách nguyên liệu.')
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: recipe.ingredients
@@ -163,11 +163,11 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                       ),
                       const SizedBox(height: 16),
                       _InfoSection(
-                        title: 'Huong dan',
+                        title: 'Hướng dẫn',
                         child: Text(
                           _stripHtmlTags(
                             recipe.instructions ??
-                                'Dang cap nhat huong dan nau an.',
+                                'Đang cập nhật hướng dẫn nấu ăn.',
                           ),
                         ),
                       ),
@@ -175,7 +175,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                           recipe.sourceUrl!.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 16),
                         _InfoSection(
-                          title: 'Nguon cong thuc',
+                          title: 'Nguồn công thức',
                           child: SelectableText(recipe.sourceUrl!),
                         ),
                       ],
@@ -266,7 +266,7 @@ class _DetailErrorState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
-              label: const Text('Thu lai'),
+              label: const Text('Thử lại'),
             ),
           ],
         ),
