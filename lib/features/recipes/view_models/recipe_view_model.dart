@@ -60,14 +60,15 @@ class RecipeViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchRecipes({List<String>? pantryIngredients}) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+		print('[RecipeViewModel.fetchRecipes] Called with pantryIngredients: $pantryIngredients');
+		_isLoading = true;
+		_errorMessage = null;
+		notifyListeners();
 
-    try {
-      final List<String> ingredients =
-          pantryIngredients ?? _mockPantryIngredients;
-
+		try {
+			final List<String> ingredients =
+					pantryIngredients ?? _mockPantryIngredients;
+			print('[RecipeViewModel.fetchRecipes] Using ingredients: $ingredients');
       _recipes = await _apiClient.getRecipeSuggestions(
         pantryIngredients: ingredients,
         diet: _selectedDiet,
@@ -75,6 +76,7 @@ class RecipeViewModel extends ChangeNotifier {
         maxReadyTime: _maxReadyTime,
       );
     } catch (error) {
+      print('[RecipeViewModel.fetchRecipes] ERROR: $error');
       _errorMessage = error.toString().replaceFirst('Exception: ', '');
       _recipes = <Recipe>[];
     } finally {
