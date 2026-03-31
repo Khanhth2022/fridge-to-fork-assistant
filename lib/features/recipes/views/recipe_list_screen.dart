@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/view_models/recipe_view_model.dart';
@@ -17,7 +18,9 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   @override
   void initState() {
     super.initState();
-    _viewModel = RecipeViewModel(apiClient: RecipeApiClient());
+    _viewModel = RecipeViewModel(
+      apiClient: RecipeApiClient(apiKey: ApiConfig.spoonacularApiKey),
+    );
     _viewModel.loadInitialSuggestions();
   }
 

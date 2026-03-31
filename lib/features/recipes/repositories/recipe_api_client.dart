@@ -8,7 +8,9 @@ import 'package:http/http.dart' as http;
 class RecipeApiClient {
 	RecipeApiClient({http.Client? httpClient, String? apiKey})
 			: _httpClient = httpClient ?? http.Client(),
-				_apiKey = apiKey ?? const String.fromEnvironment('SPOONACULAR_API_KEY');
+				_apiKey = apiKey ?? const String.fromEnvironment('SPOONACULAR_API_KEY') {
+		print('[RecipeApiClient] Initialized with API key: ${_apiKey.isEmpty ? "EMPTY" : "${_apiKey.substring(0, 5)}...${_apiKey.substring(_apiKey.length - 5)}"}');
+	}
 
 	static const String _baseHost = 'api.spoonacular.com';
 	static const Duration _requestTimeout = Duration(seconds: 15);
@@ -23,6 +25,7 @@ class RecipeApiClient {
 		int? maxReadyTime,
 		int number = 12,
 	}) async {
+		print('[RecipeApiClient.getRecipeSuggestions] Called with ingredients: $pantryIngredients, diet: $diet, cuisine: $cuisine, maxReadyTime: $maxReadyTime');
 		_ensureApiKey();
 
 		final Map<String, String> query = <String, String>{
@@ -47,7 +50,9 @@ class RecipeApiClient {
 		}
 
 		final Uri uri = Uri.https(_baseHost, '/recipes/complexSearch', query);
+		print('[RecipeApiClient] Calling API: $uri');
 		final Map<String, dynamic> payload = await _getJson(uri);
+		print('[RecipeApiClient] API response received, results count: ${payload["results"] != null ? (payload["results"] as List).length : 0}');
 
 		final List<dynamic> results = payload['results'] as List<dynamic>? ?? const <dynamic>[];
 		return results
@@ -97,6 +102,7 @@ class RecipeApiClient {
 	}
 
 	void _ensureApiKey() {
+		print('[RecipeApiClient._ensureApiKey] API key is ${_apiKey.trim().isEmpty ? "EMPTY" : "present"}');
 		if (_apiKey.trim().isEmpty) {
 			throw const FormatException(
 				'Missing Spoonacular API key. Run app with --dart-define=SPOONACULAR_API_KEY=YOUR_KEY.',

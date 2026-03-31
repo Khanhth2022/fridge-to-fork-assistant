@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/view_models/recipe_view_model.dart';
@@ -27,8 +28,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   void initState() {
     super.initState();
     _ownsViewModel = widget.viewModel == null;
-    _viewModel =
-        widget.viewModel ?? RecipeViewModel(apiClient: RecipeApiClient());
+    _viewModel = widget.viewModel ??
+        RecipeViewModel(apiClient: RecipeApiClient(apiKey: ApiConfig.spoonacularApiKey));
     _viewModel.fetchRecipeDetail(widget.recipeId);
   }
 
