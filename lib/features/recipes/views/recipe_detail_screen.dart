@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
+import 'package:fridge_to_fork_assistant/features/meal_planner/view_models/meal_planner_view_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/view_models/recipe_view_model.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
@@ -207,6 +209,18 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                                     .toList(),
                               ),
                       ),
+                      if (_missingIngredientNames(recipe).isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 12),
+                        FilledButton.tonalIcon(
+                          onPressed: () => _addMissingIngredientsToShopping(
+                            recipe,
+                          ),
+                          icon: const Icon(Icons.playlist_add),
+                          label: Text(
+                            'Thêm ${_missingIngredientNames(recipe).length} nguyên liệu thiếu vào mua sắm',
+                          ),
+                        ),
+                      ],
                       if (recipe.videoUrl != null &&
                           recipe.videoUrl!.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 16),
@@ -278,6 +292,56 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     }
 
     return false;
+  }
+
+  List<String> _missingIngredientNames(Recipe recipe) {
+    return recipe.ingredients
+        .where((RecipeIngredient ingredient) => !_isIngredientAvailable(ingredient))
+        .map(
+          (RecipeIngredient ingredient) => ingredient.name.trim().isNotEmpty
+              ? ingredient.name.trim()
+              : ingredient.original.trim(),
+        )
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  Future<void> _addMissingIngredientsToShopping(Recipe recipe) async {
+    final MealPlannerViewModel plannerViewModel = context
+        .read<MealPlannerViewModel>();
+    final List<String> missingItems = _missingIngredientNames(recipe);
+
+    if (missingItems.isEmpty) {
+      return;
+    }
+
+    int addedCount = 0;
+    for (final String ingredient in missingItems) {
+      final bool added = await plannerViewModel.addCustomShoppingItem(
+        plannerViewModel.selectedDate,
+        name: ingredient,
+        quantity: 1,
+        unit: '',
+      );
+      if (added) {
+        addedCount++;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          addedCount == 0
+              ? 'Các nguyên liệu thiếu đã có trong danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.'
+              : 'Đã thêm $addedCount nguyên liệu thiếu vào danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.',
+        ),
+      ),
+    );
   }
 
   String _normalizeText(String value) {

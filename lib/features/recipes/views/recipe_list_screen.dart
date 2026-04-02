@@ -578,60 +578,63 @@ class _RecipeCard extends StatelessWidget {
                     ),
                   const SizedBox(height: 4),
                   LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints constraints) {
-                      final Widget metaChips = Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: <Widget>[
-                          if (recipe.readyInMinutes != null &&
-                              recipe.readyInMinutes! > 0)
-                            _MetaChip(
-                              icon: Icons.schedule,
-                              text: '${recipe.readyInMinutes} phút',
-                            ),
-                          if (recipe.servings != null)
-                            _MetaChip(
-                              icon: Icons.people,
-                              text: '${recipe.servings} khẩu phần',
-                            ),
-                        ],
-                      );
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                          final Widget metaChips = Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: <Widget>[
+                              if (recipe.readyInMinutes != null &&
+                                  recipe.readyInMinutes! > 0)
+                                _MetaChip(
+                                  icon: Icons.schedule,
+                                  text: '${recipe.readyInMinutes} phút',
+                                ),
+                              if (recipe.servings != null)
+                                _MetaChip(
+                                  icon: Icons.people,
+                                  text: '${recipe.servings} khẩu phần',
+                                ),
+                            ],
+                          );
 
-                      final Widget quickAddButton = FilledButton.tonalIcon(
-                        onPressed: onQuickAdd,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Thêm'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          minimumSize: const Size(60, 32),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      );
-
-                      final bool compactLayout = constraints.maxWidth < 220;
-                      if (compactLayout) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            metaChips,
-                            const SizedBox(height: 6),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: quickAddButton,
+                          final Widget quickAddButton = FilledButton.tonalIcon(
+                            onPressed: onQuickAdd,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Thêm'),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              minimumSize: const Size(60, 32),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
                             ),
-                          ],
-                        );
-                      }
+                          );
 
-                      return Row(
-                        children: <Widget>[
-                          Expanded(child: metaChips),
-                          const SizedBox(width: 8),
-                          quickAddButton,
-                        ],
-                      );
-                    },
+                          final bool compactLayout = constraints.maxWidth < 220;
+                          if (compactLayout) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                metaChips,
+                                const SizedBox(height: 6),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: quickAddButton,
+                                ),
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            children: <Widget>[
+                              Expanded(child: metaChips),
+                              const SizedBox(width: 8),
+                              quickAddButton,
+                            ],
+                          );
+                        },
                   ),
                 ],
               ),
