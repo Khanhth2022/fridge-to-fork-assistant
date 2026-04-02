@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
+import 'package:fridge_to_fork_assistant/features/meal_planner/view_models/meal_planner_view_model.dart';
+import 'package:fridge_to_fork_assistant/features/meal_planner/widgets/planner_footer.dart';
+import 'package:fridge_to_fork_assistant/features/pantry/models/pantry_item_model.dart';
+import 'package:fridge_to_fork_assistant/features/pantry/pantry_repository.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/view_models/recipe_view_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/views/recipe_detail_screen.dart';
-import 'package:fridge_to_fork_assistant/core/widgets/bottom_nav_bar.dart';
+import 'package:provider/provider.dart';
 
 class RecipeListScreen extends StatefulWidget {
-  const RecipeListScreen({super.key});
+  const RecipeListScreen({
+    super.key,
+    this.pantryIngredients,
+    this.isPantrySuggestionWindow = false,
+  });
+
+  final List<String>? pantryIngredients;
+  final bool isPantrySuggestionWindow;
 
   @override
   State<RecipeListScreen> createState() => _RecipeListScreenState();
@@ -20,9 +31,38 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   void initState() {
     super.initState();
     _viewModel = RecipeViewModel(
-      apiClient: RecipeApiClient(apiKey: ApiConfig.spoonacularApiKey),
+      apiClient: RecipeApiClient(
+        appId: ApiConfig.edamamAppId,
+        appKey: ApiConfig.edamamAppKey,
+      ),
     );
-    _viewModel.loadInitialSuggestions();
+
+    final List<String> seedIngredients =
+        widget.pantryIngredients ?? const <String>[];
+    if (seedIngredients.isNotEmpty) {
+      _viewModel.updateMockPantryIngredients(seedIngredients);
+      _viewModel.updateReferencePantryIngredients(seedIngredients);
+      _viewModel.fetchRecipes(pantryIngredients: seedIngredients);
+    } else {
+      _loadPantryIngredientsForMatching();
+      _viewModel.loadInitialSuggestions();
+    }
+  }
+
+  Future<void> _loadPantryIngredientsForMatching() async {
+    final PantryRepository pantryRepository = PantryRepository();
+    final List<PantryItemModel> items = await pantryRepository.getAllItems();
+    final List<String> pantryNames = items
+        .map((PantryItemModel item) => item.name.trim())
+        .where((String name) => name.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (!mounted) {
+      return;
+    }
+
+    _viewModel.updateReferencePantryIngredients(pantryNames);
   }
 
   @override
@@ -33,14 +73,22 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String title = widget.isPantrySuggestionWindow
+        ? 'Bạn nấu được gì với các nguyên liệu sẵn có ?'
+        : 'Gợi ý món ăn';
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Gợi ý Món Ăn')),
+      appBar: AppBar(title: Text(title)),
       body: AnimatedBuilder(
         animation: _viewModel,
         builder: (BuildContext context, _) {
           return Column(
             children: <Widget>[
-              _PantryIngredientsBar(viewModel: _viewModel),
+              _PantryIngredientsBar(
+                viewModel: _viewModel,
+                allowManualEdit: !widget.isPantrySuggestionWindow,
+                isPantrySuggestionWindow: widget.isPantrySuggestionWindow,
+              ),
               _FiltersBar(viewModel: _viewModel),
               if (_viewModel.isLoading)
                 const LinearProgressIndicator(minHeight: 2),
@@ -49,7 +97,9 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
           );
         },
       ),
-      bottomNavigationBar: const BottomNavBar(currentIndex: 1),
+      bottomNavigationBar: widget.isPantrySuggestionWindow
+          ? const PlannerFooter(currentIndex: 1, showBottomNav: false)
+          : const PlannerFooter(currentIndex: 1),
     );
   }
 
@@ -61,7 +111,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     if (_viewModel.errorMessage != null && _viewModel.recipes.isEmpty) {
       return _ErrorState(
         message: _viewModel.errorMessage!,
-        onRetry: _viewModel.fetchRecipes,
+        onRetry: () => _viewModel.fetchRecipes(forceRefresh: true),
       );
     }
 
@@ -74,14 +124,26 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: _viewModel.fetchRecipes,
-      child: ListView.builder(
+      onRefresh: () => _viewModel.fetchRecipes(forceRefresh: true),
+      child: GridView.builder(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
         itemCount: _viewModel.recipes.length,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          mainAxisExtent: widget.isPantrySuggestionWindow ? 324 : 304,
+        ),
         itemBuilder: (BuildContext context, int index) {
           final Recipe recipe = _viewModel.recipes[index];
+          final PantryMatchResult pantryMatch = _viewModel
+              .getPantryMatchForRecipe(recipe);
+          final MealPlannerViewModel plannerViewModel = context
+              .read<MealPlannerViewModel>();
+
           return _RecipeCard(
             recipe: recipe,
+            pantryMatch: pantryMatch,
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -89,9 +151,27 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
                     recipeId: recipe.id,
                     recipeTitle: recipe.title,
                     viewModel: _viewModel,
+                    pantryIngredients: _viewModel.referencePantryIngredients,
                   ),
                 ),
               );
+            },
+            onQuickAdd: () async {
+              final bool added = await plannerViewModel.addRecipeToSelectedDate(
+                recipe,
+                missingIngredients: pantryMatch.missingIngredients,
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      added
+                          ? 'Đã thêm món ăn ${recipe.title} vào ngày ${plannerViewModel.selectedDayLabel} thành công'
+                          : 'Món ăn này đã có trong ngày ${plannerViewModel.selectedDayLabel}.',
+                    ),
+                  ),
+                );
+              }
             },
           );
         },
@@ -101,9 +181,15 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
 }
 
 class _PantryIngredientsBar extends StatelessWidget {
-  const _PantryIngredientsBar({required this.viewModel});
+  const _PantryIngredientsBar({
+    required this.viewModel,
+    required this.allowManualEdit,
+    required this.isPantrySuggestionWindow,
+  });
 
   final RecipeViewModel viewModel;
+  final bool allowManualEdit;
+  final bool isPantrySuggestionWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -115,20 +201,34 @@ class _PantryIngredientsBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              const Text(
-                'Nguyên liệu để test API',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              Text(
+                isPantrySuggestionWindow
+                    ? 'Nguyên liệu trong kho'
+                    : 'Nhập nguyên liệu',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              TextButton.icon(
-                onPressed: () => _showEditIngredientsDialog(context, viewModel),
-                icon: const Icon(Icons.edit, size: 16),
-                label: const Text('Sửa'),
-              ),
+              if (allowManualEdit)
+                TextButton.icon(
+                  onPressed: () =>
+                      _showEditIngredientsDialog(context, viewModel),
+                  icon: Icon(
+                    viewModel.mockPantryIngredients.isEmpty
+                        ? Icons.add
+                        : Icons.edit,
+                    size: 16,
+                  ),
+                  label: Text(
+                    viewModel.mockPantryIngredients.isEmpty ? 'Thêm' : 'Sửa',
+                  ),
+                ),
             ],
           ),
           Wrap(
             spacing: 8,
-            runSpacing: -8,
+            runSpacing: 8,
             children: viewModel.mockPantryIngredients
                 .map(
                   (String ingredient) => Chip(
@@ -174,7 +274,7 @@ class _PantryIngredientsBar extends StatelessWidget {
                     .where((String value) => value.isNotEmpty)
                     .toList();
                 vm.updateMockPantryIngredients(ingredients);
-                vm.fetchRecipes();
+                vm.fetchRecipes(pantryIngredients: ingredients);
                 Navigator.of(context).pop();
               },
               child: const Text('Lưu'),
@@ -193,41 +293,65 @@ class _FiltersBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget mealTypeDropdown = _FilterDropdown(
+      label: 'Loại bữa',
+      selectedValue: viewModel.selectedMealType,
+      options: RecipeViewModel.mealTypeOptions,
+      onChanged: (value) {
+        viewModel.updateMealTypeFilter(value);
+        viewModel.applyCurrentFilters();
+      },
+    );
+
+    final Widget dishTypeDropdown = _FilterDropdown(
+      label: 'Loại món',
+      selectedValue: viewModel.selectedDishType,
+      options: RecipeViewModel.dishTypeOptions,
+      onChanged: (value) {
+        viewModel.updateDishTypeFilter(value);
+        viewModel.applyCurrentFilters();
+      },
+    );
+
+    final Widget dietDropdown = _FilterDropdown(
+      label: 'Chế độ ăn',
+      selectedValue: viewModel.selectedDiet,
+      options: RecipeViewModel.dietOptions,
+      onChanged: (value) {
+        viewModel.updateDietFilter(value);
+        viewModel.applyCurrentFilters();
+      },
+    );
+
+    final Widget healthDropdown = _FilterDropdown(
+      label: 'Sức khỏe/Dị ứng',
+      selectedValue: viewModel.selectedHealth,
+      options: RecipeViewModel.healthOptions,
+      onChanged: (value) {
+        viewModel.updateHealthFilter(value);
+        viewModel.applyCurrentFilters();
+      },
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: <Widget>[
-            SizedBox(
-              width: 140,
-              child: _FilterDropdown(
-                label: 'Diet',
-                selectedValue: viewModel.selectedDiet,
-                options: RecipeViewModel.dietOptions,
-                onChanged: viewModel.updateDietFilter,
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 140,
-              child: _FilterDropdown(
-                label: 'Cuisine',
-                selectedValue: viewModel.selectedCuisine,
-                options: RecipeViewModel.cuisineOptions,
-                onChanged: viewModel.updateCuisineFilter,
-              ),
-            ),
-            const SizedBox(width: 8),
-            _TimeFilterChip(viewModel: viewModel),
-            const SizedBox(width: 8),
-            FilledButton(
-              onPressed: viewModel.fetchRecipes,
-              child: const Text('Lọc'),
-            ),
-          ],
-        ),
+      child: Column(
+        children: <Widget>[
+          _buildTwoColumnRow(mealTypeDropdown, dishTypeDropdown),
+          const SizedBox(height: 8),
+          _buildTwoColumnRow(dietDropdown, healthDropdown),
+        ],
       ),
+    );
+  }
+
+  Widget _buildTwoColumnRow(Widget left, Widget right) {
+    return Row(
+      children: <Widget>[
+        Expanded(child: left),
+        const SizedBox(width: 8),
+        Expanded(child: right),
+      ],
     );
   }
 }
@@ -248,7 +372,7 @@ class _FilterDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
-      value: selectedValue,
+      initialValue: selectedValue,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
@@ -270,93 +394,88 @@ class _FilterDropdown extends StatelessWidget {
   }
 }
 
-class _TimeFilterChip extends StatelessWidget {
-  const _TimeFilterChip({required this.viewModel});
-
-  final RecipeViewModel viewModel;
-
-  @override
-  Widget build(BuildContext context) {
-    final String label = viewModel.maxReadyTime == null
-        ? 'Thời gian'
-        : '<= ${viewModel.maxReadyTime}p';
-
-    return ActionChip(
-      label: Text(label),
-      onPressed: () => _showTimeDialog(context),
-    );
-  }
-
-  void _showTimeDialog(BuildContext context) {
-    double tempValue = (viewModel.maxReadyTime ?? 30).toDouble();
-
-    showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
-            return AlertDialog(
-              title: const Text('Giới hạn thời gian nấu ăn'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Slider(
-                    min: 10,
-                    max: 120,
-                    divisions: 11,
-                    value: tempValue,
-                    label: '${tempValue.round()} phút',
-                    onChanged: (double value) {
-                      setState(() {
-                        tempValue = value;
-                      });
-                    },
-                  ),
-                  Text('${tempValue.round()} phút'),
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () {
-                    viewModel.updateMaxReadyTime(null);
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Xóa'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    viewModel.updateMaxReadyTime(tempValue.round());
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Áp dụng'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
 class _RecipeCard extends StatelessWidget {
-  const _RecipeCard({required this.recipe, required this.onTap});
+  const _RecipeCard({
+    required this.recipe,
+    required this.pantryMatch,
+    required this.onTap,
+    required this.onQuickAdd,
+  });
 
   final Recipe recipe;
+  final PantryMatchResult pantryMatch;
   final VoidCallback onTap;
+  final VoidCallback onQuickAdd;
 
   @override
   Widget build(BuildContext context) {
+    final bool fullMatch = pantryMatch.isFullMatch;
+    final int total = pantryMatch.totalIngredientCount;
+    final int used = pantryMatch.availableIngredientCount;
+    final int missing = pantryMatch.missingIngredientCount;
+    final List<String> missingIngredients = pantryMatch.missingIngredients;
+
+    return Draggable<RecipeDragPayload>(
+      data: RecipeDragPayload(
+        recipe: recipe,
+        missingIngredients: missingIngredients,
+      ),
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          width: 320,
+          child: _buildRecipeCardBody(
+            context,
+            fullMatch,
+            total,
+            used,
+            missing,
+            missingIngredients,
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.45,
+        child: _buildRecipeCardBody(
+          context,
+          fullMatch,
+          total,
+          used,
+          missing,
+          missingIngredients,
+        ),
+      ),
+      child: _buildRecipeCardBody(
+        context,
+        fullMatch,
+        total,
+        used,
+        missing,
+        missingIngredients,
+      ),
+    );
+  }
+
+  Widget _buildRecipeCardBody(
+    BuildContext context,
+    bool fullMatch,
+    int total,
+    int used,
+    int missing,
+    List<String> missingIngredients,
+  ) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            AspectRatio(
-              aspectRatio: 16 / 9,
+            SizedBox(
+              width: double.infinity,
+              height: 104,
               child: recipe.imageUrl.isEmpty
                   ? const ColoredBox(
                       color: Colors.black12,
@@ -364,15 +483,43 @@ class _RecipeCard extends StatelessWidget {
                     )
                   : Image.network(
                       recipe.imageUrl,
+                      alignment: Alignment.topCenter,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const ColoredBox(
-                        color: Colors.black12,
-                        child: Icon(Icons.broken_image, size: 40),
-                      ),
+                      loadingBuilder:
+                          (
+                            BuildContext context,
+                            Widget child,
+                            ImageChunkEvent? loadingProgress,
+                          ) {
+                            if (loadingProgress == null) {
+                              return child;
+                            }
+                            return const ColoredBox(
+                              color: Colors.black12,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                      errorBuilder:
+                          (
+                            BuildContext context,
+                            Object error,
+                            StackTrace? stackTrace,
+                          ) => const ColoredBox(
+                            color: Colors.black12,
+                            child: Icon(Icons.broken_image, size: 40),
+                          ),
                     ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -382,23 +529,83 @@ class _RecipeCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: fullMatch
+                          ? Colors.green.shade50
+                          : Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: fullMatch
+                            ? Colors.green.shade300
+                            : Colors.orange.shade300,
+                      ),
+                    ),
+                    child: Text(
+                      fullMatch
+                          ? 'Đủ nguyên liệu: Bạn có $used/$total nguyên liệu cho món này.'
+                          : missingIngredients.isNotEmpty
+                          ? 'Gần đủ: Bạn có $used/$total nguyên liệu, chỉ cần mua thêm ${missingIngredients.take(2).join(', ')}${missingIngredients.length > 2 ? '...' : ''}.'
+                          : 'Gần đủ: Bạn có $used/$total nguyên liệu, cần mua thêm $missing nguyên liệu.',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: fullMatch
+                            ? Colors.green.shade800
+                            : Colors.orange.shade900,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (!fullMatch && missingIngredients.isNotEmpty)
+                    Text(
+                      'Thiếu: ${missingIngredients.join(', ')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  const SizedBox(height: 4),
+                  Row(
                     children: <Widget>[
-                      if (recipe.readyInMinutes != null)
-                        _MetaChip(
-                          icon: Icons.schedule,
-                          text: '${recipe.readyInMinutes} phut',
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: <Widget>[
+                            if (recipe.readyInMinutes != null &&
+                                recipe.readyInMinutes! > 0)
+                              _MetaChip(
+                                icon: Icons.schedule,
+                                text: '${recipe.readyInMinutes} phút',
+                              ),
+                            if (recipe.servings != null)
+                              _MetaChip(
+                                icon: Icons.people,
+                                text: '${recipe.servings} khẩu phần',
+                              ),
+                          ],
                         ),
-                      if (recipe.servings != null)
-                        _MetaChip(
-                          icon: Icons.people,
-                          text: '${recipe.servings} khau phan',
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: onQuickAdd,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Thêm'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(60, 32),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
                         ),
-                      if (recipe.isVegetarian)
-                        const _MetaChip(icon: Icons.eco, text: 'Vegetarian'),
+                      ),
                     ],
                   ),
                 ],

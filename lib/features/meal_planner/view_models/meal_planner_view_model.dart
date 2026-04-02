@@ -1,1 +1,536 @@
+import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
+import '../../recipes/models/recipe_model.dart';
+import '../../shopping_list/models/shopping_item_model.dart';
+import '../models/meal_plan_model.dart';
+import '../repositories/meal_planner_repository.dart';
+
+class MealPlannerViewModel extends ChangeNotifier {
+  MealPlannerViewModel({MealPlannerRepository? repository})
+    : _repository = repository ?? MealPlannerRepository() {
+    unawaited(_loadInitialData());
+  }
+
+  final MealPlannerRepository _repository;
+
+  DateTime _visibleWeekStart = _normalizeDate(DateTime.now());
+  DateTime _selectedDate = _normalizeDate(DateTime.now());
+  bool _isLoading = false;
+
+  final Map<String, List<PlannedRecipe>> _plannedRecipesByDate =
+      <String, List<PlannedRecipe>>{};
+  final Map<String, List<ShoppingItemModel>> _shoppingItemsByDate =
+      <String, List<ShoppingItemModel>>{};
+
+  bool get isLoading => _isLoading;
+  DateTime get selectedDate => _selectedDate;
+  DateTime get visibleWeekStart => _visibleWeekStart;
+
+  List<DateTime> get visibleWeekDates =>
+      List<DateTime>.generate(7, (int index) {
+        return _visibleWeekStart.add(Duration(days: index));
+      });
+
+  List<PlannedRecipe> get selectedDayRecipes => _recipesForDate(_selectedDate);
+
+  List<ShoppingItemModel> get selectedDayShoppingItems =>
+      _shoppingForDate(_selectedDate);
+
+  String get selectedDayLabel => _formatFullDate(_selectedDate);
+
+  bool isVisibleWeekDate(DateTime date) {
+    final DateTime normalized = _normalizeDate(date);
+    return !normalized.isBefore(_visibleWeekStart) &&
+        normalized.isBefore(_visibleWeekStart.add(const Duration(days: 7)));
+  }
+
+  Future<void> _loadInitialData() async {
+    _isLoading = true;
+    notifyListeners();
+    await _reloadVisibleWeek();
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> refresh() async {
+    _isLoading = true;
+    notifyListeners();
+    await _reloadVisibleWeek();
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> selectDate(DateTime date) async {
+    _selectedDate = _normalizeDate(date);
+    if (!isVisibleWeekDate(_selectedDate)) {
+      _visibleWeekStart = _selectedDate;
+      await _reloadVisibleWeek();
+    }
+    notifyListeners();
+  }
+
+  Future<void> showPreviousWeek() async {
+    _visibleWeekStart = _visibleWeekStart.subtract(const Duration(days: 7));
+    _selectedDate = _selectedDate.subtract(const Duration(days: 7));
+    await _reloadVisibleWeek();
+    notifyListeners();
+  }
+
+  Future<void> showNextWeek() async {
+    _visibleWeekStart = _visibleWeekStart.add(const Duration(days: 7));
+    _selectedDate = _selectedDate.add(const Duration(days: 7));
+    await _reloadVisibleWeek();
+    notifyListeners();
+  }
+
+  Future<bool> addRecipeToSelectedDate(
+    Recipe recipe, {
+    List<String> missingIngredients = const <String>[],
+  }) {
+    return addRecipeToDate(
+      _selectedDate,
+      recipe,
+      missingIngredients: missingIngredients,
+    );
+  }
+
+  Future<bool> addRecipeToDate(
+    DateTime date,
+    Recipe recipe, {
+    List<String> missingIngredients = const <String>[],
+  }) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<PlannedRecipe> recipes = List<PlannedRecipe>.from(
+      _recipesForDate(normalizedDate),
+    );
+
+    if (recipes.any((PlannedRecipe item) => item.recipeId == recipe.id)) {
+      return false;
+    }
+
+    final List<ShoppingIngredientSnapshot> shoppingIngredients =
+        _buildShoppingIngredientSnapshots(recipe, missingIngredients);
+
+    recipes.add(
+      PlannedRecipe.fromRecipe(
+        recipe,
+        shoppingIngredients: shoppingIngredients,
+      ),
+    );
+
+    _plannedRecipesByDate[_dateKey(normalizedDate)] = recipes;
+    await _repository.savePlannedRecipes(normalizedDate, recipes);
+
+    if (shoppingIngredients.isNotEmpty) {
+      await _addShoppingItemsForRecipe(
+        normalizedDate,
+        recipe.id.toString(),
+        shoppingIngredients,
+      );
+    }
+
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> addCustomRecipeToSelectedDate({
+    required String title,
+    required List<String> ingredientNames,
+    required List<String> pantryIngredients,
+  }) {
+    return addCustomRecipeToDate(
+      _selectedDate,
+      title: title,
+      ingredientNames: ingredientNames,
+      pantryIngredients: pantryIngredients,
+    );
+  }
+
+  Future<bool> addCustomRecipeToDate(
+    DateTime date, {
+    required String title,
+    required List<String> ingredientNames,
+    required List<String> pantryIngredients,
+  }) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final String cleanedTitle = title.trim();
+    if (cleanedTitle.isEmpty) {
+      return false;
+    }
+
+    final List<PlannedRecipe> recipes = List<PlannedRecipe>.from(
+      _recipesForDate(normalizedDate),
+    );
+    final String normalizedTitle = _normalizeText(cleanedTitle);
+    if (recipes.any(
+      (PlannedRecipe item) => _normalizeText(item.title) == normalizedTitle,
+    )) {
+      return false;
+    }
+
+    final Set<String> pantryIndex = pantryIngredients
+        .map(_normalizeText)
+        .where((String item) => item.isNotEmpty)
+        .toSet();
+
+    final List<ShoppingIngredientSnapshot> shoppingIngredients =
+        <ShoppingIngredientSnapshot>[];
+    for (final String ingredient in ingredientNames) {
+      final String cleanedIngredient = ingredient.trim();
+      if (cleanedIngredient.isEmpty) {
+        continue;
+      }
+
+      final String normalizedIngredient = _normalizeText(cleanedIngredient);
+      final bool available = pantryIndex.any(
+        (String pantryItem) =>
+            pantryItem.contains(normalizedIngredient) ||
+            normalizedIngredient.contains(pantryItem),
+      );
+      if (!available) {
+        shoppingIngredients.add(
+          ShoppingIngredientSnapshot(
+            name: cleanedIngredient,
+            quantity: 1,
+            unit: '',
+          ),
+        );
+      }
+    }
+
+    final int customRecipeId = -DateTime.now().microsecondsSinceEpoch;
+    recipes.add(
+      PlannedRecipe(
+        recipeId: customRecipeId,
+        title: cleanedTitle,
+        imageUrl: '',
+        addedAtUtcMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+        summary: 'Món ăn tự thêm',
+        shoppingIngredients: shoppingIngredients,
+      ),
+    );
+
+    _plannedRecipesByDate[_dateKey(normalizedDate)] = recipes;
+    await _repository.savePlannedRecipes(normalizedDate, recipes);
+
+    if (shoppingIngredients.isNotEmpty) {
+      await _addShoppingItemsForRecipe(
+        normalizedDate,
+        customRecipeId.toString(),
+        shoppingIngredients,
+      );
+    }
+
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> removeRecipeFromSelectedDate(int recipeId) {
+    return removeRecipeFromDate(_selectedDate, recipeId);
+  }
+
+  Future<bool> removeRecipeFromDate(DateTime date, int recipeId) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<PlannedRecipe> recipes = List<PlannedRecipe>.from(
+      _recipesForDate(normalizedDate),
+    );
+
+    final int index = recipes.indexWhere(
+      (PlannedRecipe item) => item.recipeId == recipeId,
+    );
+    if (index == -1) {
+      return false;
+    }
+
+    final PlannedRecipe removedRecipe = recipes.removeAt(index);
+    _plannedRecipesByDate[_dateKey(normalizedDate)] = recipes;
+    await _repository.savePlannedRecipes(normalizedDate, recipes);
+
+    await _removeShoppingItemsForRecipe(normalizedDate, removedRecipe);
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> toggleShoppingItemChecked(DateTime date, String itemId) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
+      _shoppingForDate(normalizedDate),
+    );
+    final int index = items.indexWhere(
+      (ShoppingItemModel item) => item.itemId == itemId,
+    );
+    if (index == -1) {
+      return;
+    }
+
+    items[index] = items[index].copyWith(checked: !items[index].checked);
+    _shoppingItemsByDate[_dateKey(normalizedDate)] = items;
+    await _repository.saveShoppingItems(normalizedDate, items);
+    notifyListeners();
+  }
+
+  Future<bool> addCustomShoppingItem(
+    DateTime date, {
+    required String name,
+    double quantity = 1,
+    String unit = '',
+  }) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
+      _shoppingForDate(normalizedDate),
+    );
+
+    final String normalizedName = _normalizeText(name);
+    if (normalizedName.isEmpty) {
+      return false;
+    }
+
+    final String itemKey = _shoppingKey(normalizedName, unit);
+    final int index = items.indexWhere(
+      (ShoppingItemModel item) => item.normalizedKey == itemKey,
+    );
+
+    if (index == -1) {
+      items.add(
+        ShoppingItemModel(
+          itemId: itemKey,
+          name: name.trim(),
+          quantity: quantity,
+          unit: unit.trim(),
+          checked: false,
+          sourceQuantities: <String, double>{},
+        ),
+      );
+    } else {
+      final ShoppingItemModel existing = items[index];
+      items[index] = existing.copyWith(quantity: existing.quantity + quantity);
+    }
+
+    _shoppingItemsByDate[_dateKey(normalizedDate)] = items;
+    await _repository.saveShoppingItems(normalizedDate, items);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> removeShoppingItem(DateTime date, String itemId) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
+      _shoppingForDate(normalizedDate),
+    );
+    final int index = items.indexWhere(
+      (ShoppingItemModel item) => item.itemId == itemId,
+    );
+    if (index == -1) {
+      return false;
+    }
+
+    items.removeAt(index);
+    _shoppingItemsByDate[_dateKey(normalizedDate)] = items;
+    await _repository.saveShoppingItems(normalizedDate, items);
+    notifyListeners();
+    return true;
+  }
+
+  List<PlannedRecipe> _recipesForDate(DateTime date) {
+    return _plannedRecipesByDate[_dateKey(date)] ?? <PlannedRecipe>[];
+  }
+
+  List<ShoppingItemModel> _shoppingForDate(DateTime date) {
+    return _shoppingItemsByDate[_dateKey(date)] ?? <ShoppingItemModel>[];
+  }
+
+  Future<void> _reloadVisibleWeek() async {
+    for (final DateTime date in visibleWeekDates) {
+      final String key = _dateKey(date);
+      _plannedRecipesByDate[key] = await _repository.getPlannedRecipes(date);
+      _shoppingItemsByDate[key] = await _repository.getShoppingItems(date);
+    }
+  }
+
+  Future<void> _addShoppingItemsForRecipe(
+    DateTime date,
+    String sourceKey,
+    List<ShoppingIngredientSnapshot> shoppingIngredients,
+  ) async {
+    final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
+      _shoppingForDate(date),
+    );
+
+    for (final ShoppingIngredientSnapshot ingredient in shoppingIngredients) {
+      final String normalizedKey = _shoppingKey(
+        ingredient.name,
+        ingredient.unit,
+      );
+      final int index = items.indexWhere(
+        (ShoppingItemModel item) => item.normalizedKey == normalizedKey,
+      );
+
+      if (index == -1) {
+        items.add(
+          ShoppingItemModel(
+            itemId: normalizedKey,
+            name: ingredient.name,
+            quantity: ingredient.quantity,
+            unit: ingredient.unit,
+            checked: false,
+            sourceQuantities: <String, double>{sourceKey: ingredient.quantity},
+          ),
+        );
+      } else {
+        final ShoppingItemModel existing = items[index];
+        final Map<String, double> sources = Map<String, double>.from(
+          existing.sourceQuantities,
+        );
+        sources.update(
+          sourceKey,
+          (double current) => current + ingredient.quantity,
+          ifAbsent: () => ingredient.quantity,
+        );
+        items[index] = existing.copyWith(
+          quantity: existing.quantity + ingredient.quantity,
+          sourceQuantities: sources,
+        );
+      }
+    }
+
+    _shoppingItemsByDate[_dateKey(date)] = items;
+    await _repository.saveShoppingItems(date, items);
+  }
+
+  Future<void> _removeShoppingItemsForRecipe(
+    DateTime date,
+    PlannedRecipe recipe,
+  ) async {
+    final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
+      _shoppingForDate(date),
+    );
+    bool changed = false;
+
+    for (final ShoppingIngredientSnapshot ingredient
+        in recipe.shoppingIngredients) {
+      final String normalizedKey = _shoppingKey(
+        ingredient.name,
+        ingredient.unit,
+      );
+      final int index = items.indexWhere(
+        (ShoppingItemModel item) => item.normalizedKey == normalizedKey,
+      );
+      if (index == -1) {
+        continue;
+      }
+
+      final ShoppingItemModel existing = items[index];
+      final Map<String, double> sources = Map<String, double>.from(
+        existing.sourceQuantities,
+      );
+      final String recipeKey = recipe.recipeId.toString();
+      final double contributed = sources[recipeKey] ?? 0;
+      if (contributed <= 0) {
+        continue;
+      }
+
+      sources.remove(recipeKey);
+      final double nextQuantity = (existing.quantity - contributed)
+          .clamp(0, double.infinity)
+          .toDouble();
+      changed = true;
+
+      if (sources.isEmpty || nextQuantity <= 0) {
+        items.removeAt(index);
+      } else {
+        items[index] = existing.copyWith(
+          quantity: nextQuantity,
+          sourceQuantities: sources,
+        );
+      }
+    }
+
+    if (changed) {
+      _shoppingItemsByDate[_dateKey(date)] = items;
+      await _repository.saveShoppingItems(date, items);
+    }
+  }
+
+  List<ShoppingIngredientSnapshot> _buildShoppingIngredientSnapshots(
+    Recipe recipe,
+    List<String> missingIngredients,
+  ) {
+    if (missingIngredients.isEmpty) {
+      return <ShoppingIngredientSnapshot>[];
+    }
+
+    final List<ShoppingIngredientSnapshot> snapshots =
+        <ShoppingIngredientSnapshot>[];
+    for (final String missing in missingIngredients) {
+      final RecipeIngredient? matched = _matchIngredient(recipe, missing);
+      final String name = matched?.name.trim().isNotEmpty == true
+          ? matched!.name.trim()
+          : missing.trim();
+      final double quantity = _toQuantity(matched?.amount) ?? 1;
+      final String unit = matched?.unit?.trim() ?? '';
+      snapshots.add(
+        ShoppingIngredientSnapshot(name: name, quantity: quantity, unit: unit),
+      );
+    }
+
+    return snapshots;
+  }
+
+  RecipeIngredient? _matchIngredient(Recipe recipe, String missingIngredient) {
+    final String normalizedMissing = _normalizeText(missingIngredient);
+    for (final RecipeIngredient ingredient in recipe.ingredients) {
+      final String normalizedName = _normalizeText(ingredient.name);
+      final String normalizedOriginal = _normalizeText(ingredient.original);
+      if (normalizedName.contains(normalizedMissing) ||
+          normalizedMissing.contains(normalizedName) ||
+          normalizedOriginal.contains(normalizedMissing) ||
+          normalizedMissing.contains(normalizedOriginal)) {
+        return ingredient;
+      }
+    }
+    return null;
+  }
+
+  static DateTime _normalizeDate(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  static String _dateKey(DateTime date) {
+    final DateTime normalized = _normalizeDate(date);
+    return '${normalized.year.toString().padLeft(4, '0')}-'
+        '${normalized.month.toString().padLeft(2, '0')}-'
+        '${normalized.day.toString().padLeft(2, '0')}';
+  }
+
+  static String _shoppingKey(String name, String unit) {
+    return '${_normalizeText(name)}|${_normalizeText(unit)}';
+  }
+
+  static String _normalizeText(String value) {
+    return value.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  static double? _toQuantity(num? value) {
+    if (value == null) {
+      return null;
+    }
+    return value.toDouble();
+  }
+
+  static String _formatFullDate(DateTime date) {
+    const List<String> weekdays = <String>[
+      'Chủ nhật',
+      'Thứ hai',
+      'Thứ ba',
+      'Thứ tư',
+      'Thứ năm',
+      'Thứ sáu',
+      'Thứ bảy',
+    ];
+
+    final String weekday = weekdays[date.weekday % 7];
+    return '$weekday, ${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}

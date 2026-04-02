@@ -4,47 +4,14 @@ import 'package:provider/provider.dart';
 import 'route_names.dart';
 import '../core/widgets/notification_test_screen.dart';
 import '../core/services/scanner/scanner_service.dart';
-import '../core/widgets/bottom_nav_bar.dart';
 import '../features/pantry/views/pantry_screen.dart' as pantry_view;
 import '../features/pantry/views/receipt_scanner_screen.dart' as pantry_receipt;
 import '../features/pantry/view_models/pantry_view_model.dart';
 import '../features/recipes/views/recipe_list_screen.dart';
 import '../features/recipes/views/recipe_detail_screen.dart';
 
-// Placeholder Screens (các thành viên khác sẽ thay thế)
-class MealPlannerScreen extends StatelessWidget {
-  final String? mealId;
-  const MealPlannerScreen({this.mealId, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Lên menu')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('Màn hình lên menu'),
-            if (mealId != null) Text('Mã ID: $mealId'),
-          ],
-        ),
-      ),
-      bottomNavigationBar: const BottomNavBar(currentIndex: 2),
-    );
-  }
-}
-
-class CalendarScreen extends StatelessWidget {
-  const CalendarScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Lịch')),
-      body: const Center(child: Text('Màn hình lịch')),
-    );
-  }
-}
+import '../features/meal_planner/views/calendar_screen.dart';
+import '../features/shopping_list/views/shopping_list_screen.dart';
 
 class MealDetailsScreen extends StatelessWidget {
   final String mealId;
@@ -88,19 +55,6 @@ class ReceiptScannerPlaceholderScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Quét hoá đơn')),
       body: const Center(child: Text('Màn hình quét hoá đơn')),
-    );
-  }
-}
-
-class ShoppingListScreen extends StatelessWidget {
-  const ShoppingListScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Danh sách mua sắm')),
-      body: const Center(child: Text('Màn hình danh sách mua sắm')),
-      bottomNavigationBar: const BottomNavBar(currentIndex: 3),
     );
   }
 }

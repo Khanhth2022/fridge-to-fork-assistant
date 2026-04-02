@@ -11,6 +11,7 @@ import '../../../core/services/sync/sync_service.dart';
 import 'receipt_scanner_screen.dart';
 import '../../../features/auth/view_models/auth_view_model.dart';
 import '../../../features/auth/views/login_screen.dart';
+import '../../../features/recipes/views/recipe_list_screen.dart';
 
 class PantryScreen extends StatelessWidget {
   Future<RestoreConflictResolution?> _askConflictResolution(
@@ -223,7 +224,7 @@ class PantryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildExpiryAlert(PantryViewModel viewModel) {
+  Widget _buildExpiryAlert(BuildContext context, PantryViewModel viewModel) {
     final now = DateTime.now();
     final expiringItems = viewModel.items.where((item) {
       final daysLeft = item.expiryDate
@@ -231,7 +232,61 @@ class PantryScreen extends StatelessWidget {
           .inDays;
       return daysLeft >= 0 && daysLeft <= 2;
     }).toList();
-    if (expiringItems.isEmpty) return SizedBox.shrink();
+    if (expiringItems.isEmpty) return const SizedBox.shrink();
+
+    Future<void> showExpiringItemsSheet() async {
+      await showModalBottomSheet<void>(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (sheetContext) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Nguyên liệu sắp hết hạn',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: expiringItems.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, index) {
+                        final item = expiringItems[index];
+                        final daysLeft = item.expiryDate
+                            .difference(DateTime(now.year, now.month, now.day))
+                            .inDays;
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.orange,
+                          ),
+                          title: Text(item.name),
+                          subtitle: Text(
+                            daysLeft == 0
+                                ? 'Hết hạn hôm nay'
+                                : 'Còn $daysLeft ngày đến hạn',
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -240,54 +295,37 @@ class PantryScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Color(0xFF90CAF9)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Icon(Icons.notifications_active, color: Colors.black54, size: 20),
-              SizedBox(width: 8),
-              Text(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: showExpiringItemsSheet,
+        child: const Row(
+          children: [
+            Icon(Icons.notifications_active, color: Colors.black54, size: 20),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
                 'Cảnh báo hạn sử dụng',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ],
-          ),
-          SizedBox(height: 8),
-          ...expiringItems.map((item) {
-            final daysLeft = item.expiryDate
-                .difference(DateTime(now.year, now.month, now.day))
-                .inDays;
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    '${item.name} sẽ hết hạn trong $daysLeft ngày.',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // TODO: Điều hướng sang màn hình gợi ý món ăn với nguyên liệu này
-                  },
-                  child: const Text('Tìm món'),
-                ),
-              ],
-            );
-          }).toList(),
-        ],
+            ),
+            Icon(Icons.chevron_right, color: Colors.black45),
+          ],
+        ),
       ),
     );
   }
 
-  const PantryScreen({Key? key}) : super(key: key);
+  const PantryScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final viewModel = Provider.of<PantryViewModel>(context);
     final authViewModel = Provider.of<AuthViewModel>(context);
+    final List<String> pantryNames = viewModel.items
+        .map((PantryItemModel e) => e.name)
+        .where((String name) => name.trim().isNotEmpty)
+        .toList();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản lý tủ bếp'),
@@ -462,7 +500,7 @@ class PantryScreen extends StatelessWidget {
               itemCount: viewModel.items.length + 1,
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return _buildExpiryAlert(viewModel);
+                  return _buildExpiryAlert(context, viewModel);
                 }
                 final item = viewModel.items[index - 1];
                 final now = DateTime.now();
@@ -690,12 +728,38 @@ class PantryScreen extends StatelessWidget {
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF9575CD),
-        onPressed: () async {
-          await _showAddOptions(context, viewModel);
-        },
-        child: const Icon(Icons.add),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            FloatingActionButton(
+              heroTag: 'recipe_suggestion_fab',
+              backgroundColor: const Color(0xFF4CAF50),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    fullscreenDialog: true,
+                    builder: (_) => RecipeListScreen(
+                      pantryIngredients: pantryNames,
+                      isPantrySuggestionWindow: true,
+                    ),
+                  ),
+                );
+              },
+              child: const Icon(Icons.lightbulb_outline),
+            ),
+            FloatingActionButton(
+              heroTag: 'add_ingredient_fab',
+              backgroundColor: const Color(0xFF9575CD),
+              onPressed: () async {
+                await _showAddOptions(context, viewModel);
+              },
+              child: const Icon(Icons.add),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: const BottomNavBar(currentIndex: 0),
     );

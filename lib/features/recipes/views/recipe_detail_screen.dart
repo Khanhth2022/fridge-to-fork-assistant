@@ -3,6 +3,7 @@ import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/view_models/recipe_view_model.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
   const RecipeDetailScreen({
@@ -10,11 +11,13 @@ class RecipeDetailScreen extends StatefulWidget {
     required this.recipeId,
     this.recipeTitle,
     this.viewModel,
+    this.pantryIngredients = const <String>[],
   });
 
   final int recipeId;
   final String? recipeTitle;
   final RecipeViewModel? viewModel;
+  final List<String> pantryIngredients;
 
   @override
   State<RecipeDetailScreen> createState() => _RecipeDetailScreenState();
@@ -23,13 +26,29 @@ class RecipeDetailScreen extends StatefulWidget {
 class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   late final RecipeViewModel _viewModel;
   late final bool _ownsViewModel;
+  late final Set<String> _normalizedPantryIngredients;
+  late final Set<String> _pantryTokens;
 
   @override
   void initState() {
     super.initState();
     _ownsViewModel = widget.viewModel == null;
-    _viewModel = widget.viewModel ??
-        RecipeViewModel(apiClient: RecipeApiClient(apiKey: ApiConfig.spoonacularApiKey));
+    _normalizedPantryIngredients = widget.pantryIngredients
+        .map(_normalizeText)
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+    _pantryTokens = widget.pantryIngredients
+        .expand(_extractTokens)
+        .where((String token) => token.isNotEmpty)
+        .toSet();
+    _viewModel =
+        widget.viewModel ??
+        RecipeViewModel(
+          apiClient: RecipeApiClient(
+            appId: ApiConfig.edamamAppId,
+            appKey: ApiConfig.edamamAppKey,
+          ),
+        );
     _viewModel.fetchRecipeDetail(widget.recipeId);
   }
 
@@ -44,7 +63,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.recipeTitle ?? 'Chi tiet mon an')),
+      appBar: AppBar(title: Text(widget.recipeTitle ?? 'Chi tiết món ăn')),
       body: AnimatedBuilder(
         animation: _viewModel,
         builder: (BuildContext context, _) {
@@ -67,24 +86,55 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             );
           }
 
+          final String detailImageUrl = recipe.imageUrl.isNotEmpty
+              ? recipe.imageUrl
+              : '';
+
           return RefreshIndicator(
             onRefresh: () => _viewModel.fetchRecipeDetail(widget.recipeId),
             child: ListView(
               children: <Widget>[
                 AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: recipe.imageUrl.isEmpty
+                  child: detailImageUrl.isEmpty
                       ? const ColoredBox(
                           color: Colors.black12,
                           child: Icon(Icons.restaurant, size: 56),
                         )
                       : Image.network(
-                          recipe.imageUrl,
+                          detailImageUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const ColoredBox(
-                            color: Colors.black12,
-                            child: Icon(Icons.broken_image, size: 40),
-                          ),
+                          loadingBuilder:
+                              (
+                                BuildContext context,
+                                Widget child,
+                                ImageChunkEvent? loadingProgress,
+                              ) {
+                                if (loadingProgress == null) {
+                                  return child;
+                                }
+                                return const ColoredBox(
+                                  color: Colors.black12,
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                          errorBuilder:
+                              (
+                                BuildContext context,
+                                Object error,
+                                StackTrace? stackTrace,
+                              ) => const ColoredBox(
+                                color: Colors.black12,
+                                child: Icon(Icons.broken_image, size: 40),
+                              ),
                         ),
                 ),
                 Padding(
@@ -101,7 +151,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                         spacing: 8,
                         runSpacing: 6,
                         children: <Widget>[
-                          if (recipe.readyInMinutes != null)
+                          if (recipe.readyInMinutes != null &&
+                              recipe.readyInMinutes! > 0)
                             _DetailChip(
                               icon: Icons.schedule,
                               text: '${recipe.readyInMinutes} phút',
@@ -143,41 +194,37 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                                         padding: const EdgeInsets.only(
                                           bottom: 8,
                                         ),
-                                        child: Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: <Widget>[
-                                            const Text('• '),
-                                            Expanded(
-                                              child: Text(
-                                                ingredient.original.isNotEmpty
-                                                    ? ingredient.original
-                                                    : ingredient.name,
-                                              ),
-                                            ),
-                                          ],
+                                        child: _IngredientRow(
+                                          text: ingredient.original.isNotEmpty
+                                              ? ingredient.original
+                                              : ingredient.name,
+                                          isAvailable: _isIngredientAvailable(
+                                            ingredient,
+                                          ),
                                         ),
                                       ),
                                     )
                                     .toList(),
                               ),
                       ),
-                      const SizedBox(height: 16),
-                      _InfoSection(
-                        title: 'Hướng dẫn',
-                        child: Text(
-                          _stripHtmlTags(
-                            recipe.instructions ??
-                                'Đang cập nhật hướng dẫn nấu ăn.',
-                          ),
+                      if (recipe.videoUrl != null &&
+                          recipe.videoUrl!.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 16),
+                        _InfoSection(
+                          title: 'Video',
+                          child: SelectableText(recipe.videoUrl!),
                         ),
-                      ),
+                      ],
                       if (recipe.sourceUrl != null &&
                           recipe.sourceUrl!.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 16),
                         _InfoSection(
                           title: 'Nguồn công thức',
-                          child: SelectableText(recipe.sourceUrl!),
+                          child: FilledButton.icon(
+                            onPressed: () => _openSourceUrl(recipe.sourceUrl!),
+                            icon: const Icon(Icons.open_in_new),
+                            label: const Text('Xem hướng dẫn trên website'),
+                          ),
                         ),
                       ],
                     ],
@@ -198,6 +245,206 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         .replaceAll('&amp;', '&')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  bool _isIngredientAvailable(RecipeIngredient ingredient) {
+    final String ingredientName = _normalizeText(ingredient.name);
+    final String ingredientOriginal = _normalizeText(ingredient.original);
+    final Set<String> ingredientTokens = <String>{
+      ..._extractTokens(ingredient.name),
+      ..._extractTokens(ingredient.original),
+    };
+
+    for (final String pantryItem in _normalizedPantryIngredients) {
+      if (pantryItem.isEmpty) {
+        continue;
+      }
+      if (ingredientName.contains(pantryItem) ||
+          pantryItem.contains(ingredientName)) {
+        return true;
+      }
+      if (ingredientOriginal.contains(pantryItem) ||
+          pantryItem.contains(ingredientOriginal)) {
+        return true;
+      }
+    }
+
+    if (ingredientTokens.isNotEmpty && _pantryTokens.isNotEmpty) {
+      for (final String token in ingredientTokens) {
+        if (_pantryTokens.contains(token)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  String _normalizeText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  Set<String> _extractTokens(String input) {
+    final String normalized = _normalizeText(input);
+    if (normalized.isEmpty) {
+      return <String>{};
+    }
+
+    final Set<String> stopWords = <String>{
+      'and',
+      'or',
+      'of',
+      'the',
+      'a',
+      'an',
+      'fresh',
+      'large',
+      'small',
+      'to',
+      'taste',
+      'cup',
+      'cups',
+      'tbsp',
+      'tsp',
+      'oz',
+      'g',
+      'kg',
+      'ml',
+      'l',
+      'optional',
+    };
+
+    return normalized.split(' ').map((String token) => token.trim()).where((
+      String token,
+    ) {
+      if (token.length < 3) {
+        return false;
+      }
+      if (RegExp(r'^\d+$').hasMatch(token)) {
+        return false;
+      }
+      return !stopWords.contains(token);
+    }).toSet();
+  }
+
+  Future<void> _openSourceUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    final bool opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không mở được liên kết nguồn công thức.'),
+        ),
+      );
+    }
+  }
+}
+
+class _IngredientRow extends StatelessWidget {
+  const _IngredientRow({required this.text, required this.isAvailable});
+
+  final String text;
+  final bool isAvailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color background = isAvailable
+        ? Colors.green.shade50
+        : Colors.orange.shade50;
+    final Color border = isAvailable
+        ? Colors.green.shade300
+        : Colors.orange.shade300;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            isAvailable ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 16,
+            color: isAvailable ? Colors.green.shade700 : Colors.orange.shade800,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(text),
+                const SizedBox(height: 4),
+                Text(
+                  isAvailable ? 'Đã có trong kho' : 'Chưa có trong kho',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isAvailable
+                        ? Colors.green.shade800
+                        : Colors.orange.shade900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InstructionsSteps extends StatelessWidget {
+  const _InstructionsSteps({required this.instructions, this.sourceUrl});
+
+  final String instructions;
+  final String? sourceUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> steps = instructions
+        .split(RegExp(r'\.|\n'))
+        .map((String line) => line.trim())
+        .where((String line) => line.length > 8)
+        .toList();
+
+    if (steps.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text(
+            'Edamam khong cung cap chi tiet tung buoc cho cong thuc web. Vui long xem huong dan day du tai Nguon cong thuc ben duoi.',
+          ),
+          if (sourceUrl != null && sourceUrl!.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: 8),
+            SelectableText(sourceUrl!),
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      children: List<Widget>.generate(steps.length, (int index) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              CircleAvatar(radius: 12, child: Text('${index + 1}')),
+              const SizedBox(width: 8),
+              Expanded(child: Text(steps[index])),
+            ],
+          ),
+        );
+      }),
+    );
   }
 }
 
