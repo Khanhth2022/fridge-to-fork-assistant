@@ -23,6 +23,7 @@ class SyncService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final AuthService authService;
   static const String _pantryBoxName = 'pantry_items';
+  static const String _syncMetaBoxName = 'sync_metadata';
 
   SyncService({required this.authService});
 
@@ -49,19 +50,16 @@ class SyncService {
       final localItems = box.values.toList();
 
       for (var item in localItems) {
-        // Skip deleted items (soft delete) for now
-        if (item.deletedAtUtcMs != null) continue;
-
         await _uploadOrUpdateItem(item);
       }
 
       // Mark all items as synced
       for (int i = 0; i < localItems.length; i++) {
-        if (localItems[i].deletedAtUtcMs == null) {
-          final updated = localItems[i].copyWith(isDirty: false);
-          await box.putAt(i, updated);
-        }
+        final updated = localItems[i].copyWith(isDirty: false);
+        await box.putAt(i, updated);
       }
+
+      await _updateLastSyncTime();
     } catch (e) {
       throw 'Lỗi khi sao lưu: $e';
     }
@@ -114,8 +112,7 @@ class SyncService {
         }
 
         final localItem = localItems[localItemIndex];
-        if (_isDifferentItem(localItem, cloudItem) &&
-            localItem.updatedAtUtcMs != cloudItem.updatedAtUtcMs) {
+        if (_isDifferentItem(localItem, cloudItem)) {
           conflicts.add(
             RestoreConflictInfo(
               itemId: localItem.itemId,
@@ -166,9 +163,7 @@ class SyncService {
           // Local has it, check timestamps
           final localItem = box.getAt(localItemIndex)!;
 
-          final hasConflict =
-              _isDifferentItem(localItem, cloudItem) &&
-              localItem.updatedAtUtcMs != cloudItem.updatedAtUtcMs;
+          final bool hasConflict = _isDifferentItem(localItem, cloudItem);
 
           if (hasConflict) {
             if (conflictResolution == RestoreConflictResolution.preferCloud) {
@@ -188,6 +183,8 @@ class SyncService {
           // If local is dirty, keep local (local-first principle)
         }
       }
+
+      await _updateLastSyncTime();
     } catch (e) {
       throw 'Lỗi khi khôi phục: $e';
     }
@@ -203,11 +200,12 @@ class SyncService {
   Future<Map<String, dynamic>> getSyncStatus() async {
     try {
       final box = await Hive.openBox<PantryItemModel>(_pantryBoxName);
+      final metaBox = await Hive.openBox(_syncMetaBoxName);
       final items = box.values.toList();
 
       final dirtyCount = items.where((item) => item.isDirty).length;
       final totalCount = items.length;
-      final lastSyncTime = box.get('lastSyncTime', defaultValue: null);
+      final lastSyncTime = metaBox.get('lastSyncTime');
 
       return {
         'isSynced': dirtyCount == 0,
@@ -223,7 +221,14 @@ class SyncService {
   // Clear all local data (use with caution)
   Future<void> clearAllLocalData() async {
     final box = await Hive.openBox<PantryItemModel>(_pantryBoxName);
+    final metaBox = await Hive.openBox(_syncMetaBoxName);
     await box.clear();
+    await metaBox.clear();
+  }
+
+  Future<void> _updateLastSyncTime() async {
+    final metaBox = await Hive.openBox(_syncMetaBoxName);
+    await metaBox.put('lastSyncTime', DateTime.now().millisecondsSinceEpoch);
   }
 
   bool _isDifferentItem(PantryItemModel localItem, PantryItemModel cloudItem) {

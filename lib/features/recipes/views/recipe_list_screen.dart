@@ -98,8 +98,12 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
         },
       ),
       bottomNavigationBar: widget.isPantrySuggestionWindow
-          ? const PlannerFooter(currentIndex: 1, showBottomNav: false)
-          : const PlannerFooter(currentIndex: 1),
+          ? const PlannerFooter(
+              currentIndex: 1,
+              showCalendar: false,
+              showBottomNav: false,
+            )
+          : const PlannerFooter(currentIndex: 1, showCalendar: false),
     );
   }
 
@@ -415,7 +419,7 @@ class _RecipeCard extends StatelessWidget {
     final int missing = pantryMatch.missingIngredientCount;
     final List<String> missingIngredients = pantryMatch.missingIngredients;
 
-    return Draggable<RecipeDragPayload>(
+    return LongPressDraggable<RecipeDragPayload>(
       data: RecipeDragPayload(
         recipe: recipe,
         missingIngredients: missingIngredients,
@@ -573,29 +577,27 @@ class _RecipeCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   const SizedBox(height: 4),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: <Widget>[
-                            if (recipe.readyInMinutes != null &&
-                                recipe.readyInMinutes! > 0)
-                              _MetaChip(
-                                icon: Icons.schedule,
-                                text: '${recipe.readyInMinutes} phút',
-                              ),
-                            if (recipe.servings != null)
-                              _MetaChip(
-                                icon: Icons.people,
-                                text: '${recipe.servings} khẩu phần',
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.tonalIcon(
+                  LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints constraints) {
+                      final Widget metaChips = Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: <Widget>[
+                          if (recipe.readyInMinutes != null &&
+                              recipe.readyInMinutes! > 0)
+                            _MetaChip(
+                              icon: Icons.schedule,
+                              text: '${recipe.readyInMinutes} phút',
+                            ),
+                          if (recipe.servings != null)
+                            _MetaChip(
+                              icon: Icons.people,
+                              text: '${recipe.servings} khẩu phần',
+                            ),
+                        ],
+                      );
+
+                      final Widget quickAddButton = FilledButton.tonalIcon(
                         onPressed: onQuickAdd,
                         icon: const Icon(Icons.add),
                         label: const Text('Thêm'),
@@ -605,8 +607,31 @@ class _RecipeCard extends StatelessWidget {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
                         ),
-                      ),
-                    ],
+                      );
+
+                      final bool compactLayout = constraints.maxWidth < 220;
+                      if (compactLayout) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            metaChips,
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: quickAddButton,
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: <Widget>[
+                          Expanded(child: metaChips),
+                          const SizedBox(width: 8),
+                          quickAddButton,
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

@@ -19,15 +19,23 @@ class PlannerFooter extends StatelessWidget {
   const PlannerFooter({
     super.key,
     required this.currentIndex,
+    this.showCalendar = true,
     this.showBottomNav = true,
   });
 
   final int currentIndex;
+  final bool showCalendar;
   final bool showBottomNav;
 
   @override
   Widget build(BuildContext context) {
-    final Widget calendarBar = const _WeeklyScheduleBar();
+    final Widget calendarBar = showCalendar
+        ? const _WeeklyScheduleBar()
+        : const SizedBox.shrink();
+
+    if (!showCalendar && !showBottomNav) {
+      return const SizedBox.shrink();
+    }
 
     if (!showBottomNav) {
       return SafeArea(top: false, child: calendarBar);

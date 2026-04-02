@@ -45,6 +45,7 @@ class PantryRepository {
       final item = box.getAt(index)!;
       final deletedItem = item.copyWith(
         deletedAtUtcMs: DateTime.now().millisecondsSinceEpoch,
+        updatedAtUtcMs: DateTime.now().millisecondsSinceEpoch,
         isDirty: true,
       );
       await box.putAt(index, deletedItem);

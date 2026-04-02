@@ -179,7 +179,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: const PlannerFooter(currentIndex: 3),
+      bottomNavigationBar: const PlannerFooter(
+        currentIndex: 3,
+        showCalendar: false,
+      ),
     );
   }
 }
