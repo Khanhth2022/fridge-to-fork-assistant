@@ -375,7 +375,11 @@ class PantryScreen extends StatelessWidget {
                 final SyncService syncService = context.read<SyncService>();
                 await _runSyncAction(
                   context: context,
-                  action: () => syncService.backupNow(),
+                  action: () async {
+                    await syncService.backupNow();
+                    await syncService.backupMealPlansNow();
+                    await syncService.backupShoppingListsNow();
+                  },
                   successMessage: 'Sao lưu Firebase thành công',
                 );
               } else if (value == 'restore') {
@@ -428,6 +432,8 @@ class PantryScreen extends StatelessWidget {
                       conflictResolution:
                           resolution ?? RestoreConflictResolution.preferLocal,
                     );
+                    await syncService.restoreMealPlansFromCloud();
+                    await syncService.restoreShoppingListsFromCloud();
                     await viewModel.loadItems();
                   },
                   successMessage: 'Khôi phục dữ liệu từ Firebase thành công',

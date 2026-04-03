@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive/hive.dart';
 import '../../../features/pantry/models/pantry_item_model.dart';
@@ -24,6 +26,10 @@ class SyncService {
   final AuthService authService;
   static const String _pantryBoxName = 'pantry_items';
   static const String _syncMetaBoxName = 'sync_metadata';
+  static const String _mealPlanBoxName = 'meal_plans_box';
+  static const String _shoppingListBoxName = 'shopping_lists_box';
+  static const String _mealPlanMetaBoxName = 'meal_plans_meta';
+  static const String _shoppingListMetaBoxName = 'shopping_lists_meta';
 
   SyncService({required this.authService});
 
@@ -37,6 +43,25 @@ class SyncService {
         .collection('users')
         .doc(userId)
         .collection('pantry_items');
+  }
+
+  CollectionReference<Map<String, dynamic>> _getUserMealPlansRef() {
+    final userId = authService.currentUserId;
+    if (userId == null) {
+      throw Exception('User not authenticated');
+    }
+    return _firestore.collection('users').doc(userId).collection('meal_plans');
+  }
+
+  CollectionReference<Map<String, dynamic>> _getUserShoppingListsRef() {
+    final userId = authService.currentUserId;
+    if (userId == null) {
+      throw Exception('User not authenticated');
+    }
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('shopping_lists');
   }
 
   // Backup local pantry to Firestore (Local-first: local wins on conflict)
@@ -62,6 +87,78 @@ class SyncService {
       await _updateLastSyncTime();
     } catch (e) {
       throw 'Lỗi khi sao lưu: $e';
+    }
+  }
+
+  Future<void> backupMealPlansNow() async {
+    if (!authService.isLoggedIn) {
+      throw 'Vui lòng đăng nhập để sao lưu lịch nấu';
+    }
+
+    try {
+      final Box<String> box = await Hive.openBox<String>(_mealPlanBoxName);
+      final Box<int> metaBox = await Hive.openBox<int>(_mealPlanMetaBoxName);
+      final ref = _getUserMealPlansRef();
+      final int nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+
+      for (final key in box.keys) {
+        final String dateKey = key.toString();
+        final String? raw = box.get(key);
+        if (raw == null || raw.isEmpty) {
+          continue;
+        }
+
+        final List<Map<String, dynamic>> recipes = _decodeJsonList(raw);
+        if (recipes.isEmpty) {
+          continue;
+        }
+
+        final int updatedAtUtcMs = metaBox.get(dateKey) ?? nowUtcMs;
+        await ref.doc(dateKey).set({
+          'dateKey': dateKey,
+          'recipes': recipes,
+          'updatedAtUtcMs': updatedAtUtcMs,
+        });
+      }
+    } catch (e) {
+      throw 'Lỗi khi sao lưu lịch nấu: $e';
+    }
+  }
+
+  Future<void> backupShoppingListsNow() async {
+    if (!authService.isLoggedIn) {
+      throw 'Vui lòng đăng nhập để sao lưu danh sách mua sắm';
+    }
+
+    try {
+      final Box<String> box = await Hive.openBox<String>(_shoppingListBoxName);
+      final Box<int> metaBox = await Hive.openBox<int>(
+        _shoppingListMetaBoxName,
+      );
+      final ref = _getUserShoppingListsRef();
+      final int nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+
+      for (final key in box.keys) {
+        final String dateKey = key.toString();
+        final String? raw = box.get(key);
+        if (raw == null || raw.isEmpty) {
+          continue;
+        }
+
+        final List<Map<String, dynamic>> items = _decodeJsonList(raw);
+        if (items.isEmpty) {
+          continue;
+        }
+
+        final int updatedAtUtcMs = metaBox.get(dateKey) ?? nowUtcMs;
+        await ref.doc(dateKey).set({
+          'dateKey': dateKey,
+          'items': items,
+          'updatedAtUtcMs': updatedAtUtcMs,
+        });
+      }
+    } catch (e) {
+      throw 'Lỗi khi sao lưu danh sách mua sắm: $e';
     }
   }
 
@@ -190,10 +287,108 @@ class SyncService {
     }
   }
 
+  Future<void> restoreMealPlansFromCloud() async {
+    if (!authService.isLoggedIn) {
+      throw 'Vui lòng đăng nhập để khôi phục lịch nấu';
+    }
+
+    try {
+      final Box<String> box = await Hive.openBox<String>(_mealPlanBoxName);
+      final Box<int> metaBox = await Hive.openBox<int>(_mealPlanMetaBoxName);
+      final ref = _getUserMealPlansRef();
+      final snapshot = await ref.get();
+
+      for (final doc in snapshot.docs) {
+        final Map<String, dynamic> data = doc.data();
+        final String dateKey = (data['dateKey'] ?? doc.id).toString();
+        final int cloudUpdatedAtUtcMs =
+            (data['updatedAtUtcMs'] as num?)?.toInt() ?? 0;
+        final List<Map<String, dynamic>> recipes = _normalizeFirestoreList(
+          data['recipes'] as List<dynamic>? ?? const <dynamic>[],
+        );
+
+        final String? localRaw = box.get(dateKey);
+        final int localUpdatedAtUtcMs = metaBox.get(dateKey) ?? 0;
+
+        if (localRaw == null || localRaw.isEmpty) {
+          if (recipes.isEmpty) {
+            await box.delete(dateKey);
+            await metaBox.delete(dateKey);
+            continue;
+          }
+          await box.put(dateKey, jsonEncode(recipes));
+          await metaBox.put(dateKey, cloudUpdatedAtUtcMs);
+          continue;
+        }
+
+        if (cloudUpdatedAtUtcMs > localUpdatedAtUtcMs) {
+          await box.put(dateKey, jsonEncode(recipes));
+          await metaBox.put(dateKey, cloudUpdatedAtUtcMs);
+        }
+      }
+
+      await _updateLastSyncTime();
+    } catch (e) {
+      throw 'Lỗi khi khôi phục lịch nấu: $e';
+    }
+  }
+
+  Future<void> restoreShoppingListsFromCloud() async {
+    if (!authService.isLoggedIn) {
+      throw 'Vui lòng đăng nhập để khôi phục danh sách mua sắm';
+    }
+
+    try {
+      final Box<String> box = await Hive.openBox<String>(_shoppingListBoxName);
+      final Box<int> metaBox = await Hive.openBox<int>(
+        _shoppingListMetaBoxName,
+      );
+      final ref = _getUserShoppingListsRef();
+      final snapshot = await ref.get();
+
+      for (final doc in snapshot.docs) {
+        final Map<String, dynamic> data = doc.data();
+        final String dateKey = (data['dateKey'] ?? doc.id).toString();
+        final int cloudUpdatedAtUtcMs =
+            (data['updatedAtUtcMs'] as num?)?.toInt() ?? 0;
+        final List<Map<String, dynamic>> items = _normalizeFirestoreList(
+          data['items'] as List<dynamic>? ?? const <dynamic>[],
+        );
+
+        final String? localRaw = box.get(dateKey);
+        final int localUpdatedAtUtcMs = metaBox.get(dateKey) ?? 0;
+
+        if (localRaw == null || localRaw.isEmpty) {
+          if (items.isEmpty) {
+            await box.delete(dateKey);
+            await metaBox.delete(dateKey);
+            continue;
+          }
+          await box.put(dateKey, jsonEncode(items));
+          await metaBox.put(dateKey, cloudUpdatedAtUtcMs);
+          continue;
+        }
+
+        if (cloudUpdatedAtUtcMs > localUpdatedAtUtcMs) {
+          await box.put(dateKey, jsonEncode(items));
+          await metaBox.put(dateKey, cloudUpdatedAtUtcMs);
+        }
+      }
+
+      await _updateLastSyncTime();
+    } catch (e) {
+      throw 'Lỗi khi khôi phục danh sách mua sắm: $e';
+    }
+  }
+
   // Sync all items bidirectionally (backup và restore)
   Future<void> syncAll() async {
     await backupNow();
+    await backupMealPlansNow();
+    await backupShoppingListsNow();
     await restoreFromCloud();
+    await restoreMealPlansFromCloud();
+    await restoreShoppingListsFromCloud();
   }
 
   // Get sync status
@@ -222,8 +417,40 @@ class SyncService {
   Future<void> clearAllLocalData() async {
     final box = await Hive.openBox<PantryItemModel>(_pantryBoxName);
     final metaBox = await Hive.openBox(_syncMetaBoxName);
+    final mealPlanBox = await Hive.openBox<String>(_mealPlanBoxName);
+    final mealPlanMetaBox = await Hive.openBox<int>(_mealPlanMetaBoxName);
+    final shoppingListBox = await Hive.openBox<String>(_shoppingListBoxName);
+    final shoppingListMetaBox = await Hive.openBox<int>(
+      _shoppingListMetaBoxName,
+    );
     await box.clear();
     await metaBox.clear();
+    await mealPlanBox.clear();
+    await mealPlanMetaBox.clear();
+    await shoppingListBox.clear();
+    await shoppingListMetaBox.clear();
+  }
+
+  List<Map<String, dynamic>> _decodeJsonList(String raw) {
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! List<dynamic>) {
+        return <Map<String, dynamic>>[];
+      }
+      return _normalizeFirestoreList(decoded);
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  List<Map<String, dynamic>> _normalizeFirestoreList(List<dynamic> rawList) {
+    return rawList.whereType<Map<String, dynamic>>().map((
+      Map<String, dynamic> map,
+    ) {
+      return map.map(
+        (dynamic key, dynamic value) => MapEntry(key.toString(), value),
+      );
+    }).toList();
   }
 
   Future<void> _updateLastSyncTime() async {
