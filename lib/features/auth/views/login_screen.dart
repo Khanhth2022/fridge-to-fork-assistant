@@ -203,6 +203,37 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
+                if (_isLoginMode) ...[
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('Hoặc'),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: authViewModel.isLoading
+                        ? null
+                        : () async {
+                            final success =
+                                await authViewModel.loginWithGoogle();
+                            if (success && mounted) {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                    icon: const Icon(Icons.g_mobiledata),
+                    label: const Text('Đăng nhập với Google'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Toggle login/register mode
                 TextButton(
                   onPressed: authViewModel.isLoading

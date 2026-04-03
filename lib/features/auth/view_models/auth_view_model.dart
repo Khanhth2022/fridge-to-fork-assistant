@@ -131,6 +131,39 @@ class AuthViewModel extends ChangeNotifier {
     return false;
   }
 
+  // Login with Google
+  Future<bool> loginWithGoogle() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final credential = await authService.loginWithGoogle();
+      if (credential?.user == null) {
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      _user = credential!.user;
+      _isLoggedIn = true;
+
+      await authRepository.saveUserInfo(
+        userId: _user!.uid,
+        email: _user!.email ?? '',
+      );
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // Logout
   Future<void> logout() async {
     _isLoading = true;

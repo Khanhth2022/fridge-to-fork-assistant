@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
@@ -51,9 +52,39 @@ class AuthService {
     }
   }
 
+  // Login with Google
+  Future<UserCredential?> loginWithGoogle() async {
+    try {
+      if (kIsWeb) {
+        final googleProvider = GoogleAuthProvider();
+        return await _firebaseAuth.signInWithPopup(googleProvider);
+      }
+
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        return null; // User canceled
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      return await _firebaseAuth.signInWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Lỗi đăng nhập Google: $e';
+    }
+  }
+
   // Sign out
   Future<void> signOut() async {
     try {
+      if (!kIsWeb) {
+        await GoogleSignIn().signOut();
+      }
       await _firebaseAuth.signOut();
     } catch (e) {
       throw 'Lỗi khi đăng xuất: $e';
