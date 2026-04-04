@@ -313,8 +313,8 @@ class MealPlannerViewModel extends ChangeNotifier {
     final DateTime purchaseDate = DateTime(now.year, now.month, now.day);
     final DateTime expiryDate = purchaseDate.add(const Duration(days: 7));
 
-    final List<PantryItemModel> pantryItems =
-        await _pantryRepository.getAllItems();
+    final List<PantryItemModel> pantryItems = await _pantryRepository
+        .getAllItems();
     final String normalizedName = _normalizeText(name);
     final String normalizedUnit = _normalizeText(unit);
     final int existingIndex = pantryItems.indexWhere(

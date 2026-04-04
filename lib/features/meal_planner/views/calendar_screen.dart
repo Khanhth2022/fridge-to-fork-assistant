@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/meal_plan_model.dart';
 import '../view_models/meal_planner_view_model.dart';
@@ -85,20 +86,40 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
                   ),
                 ),
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    children: <Widget>[
-                      if (viewModel.selectedDayRecipes.isEmpty)
-                        const _EmptyPlanState()
-                      else
-                        ...viewModel.selectedDayRecipes.map(
-                          (PlannedRecipe recipe) => _PlannedRecipeTile(
-                            recipe: recipe,
-                            onRemove: () => viewModel
-                                .removeRecipeFromSelectedDate(recipe.recipeId),
-                          ),
-                        ),
-                    ],
+                  child: ValueListenableBuilder<Box<PantryItemModel>>(
+                    valueListenable: Hive.box<PantryItemModel>(
+                      PantryRepository.boxName,
+                    ).listenable(),
+                    builder: (context, pantryBox, _) {
+                      final Set<String> pantryIndex = pantryBox.values
+                          .where(
+                            (PantryItemModel item) =>
+                                item.deletedAtUtcMs == null,
+                          )
+                          .map((PantryItemModel item) => item.name)
+                          .where((String name) => name.trim().isNotEmpty)
+                          .map(_normalizeText)
+                          .toSet();
+
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        children: <Widget>[
+                          if (viewModel.selectedDayRecipes.isEmpty)
+                            const _EmptyPlanState()
+                          else
+                            ...viewModel.selectedDayRecipes.map(
+                              (PlannedRecipe recipe) => _PlannedRecipeTile(
+                                recipe: recipe,
+                                pantryIndex: pantryIndex,
+                                onRemove: () => viewModel
+                                    .removeRecipeFromSelectedDate(
+                                      recipe.recipeId,
+                                    ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -163,6 +184,10 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
         .map((String item) => item.trim())
         .where((String item) => item.isNotEmpty)
         .toList();
+  }
+
+  static String _normalizeText(String value) {
+    return value.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 }
 
@@ -238,9 +263,14 @@ class _CustomRecipeForm extends StatelessWidget {
 }
 
 class _PlannedRecipeTile extends StatelessWidget {
-  const _PlannedRecipeTile({required this.recipe, required this.onRemove});
+  const _PlannedRecipeTile({
+    required this.recipe,
+    required this.pantryIndex,
+    required this.onRemove,
+  });
 
   final PlannedRecipe recipe;
+  final Set<String> pantryIndex;
   final VoidCallback onRemove;
 
   @override
@@ -266,9 +296,7 @@ class _PlannedRecipeTile extends StatelessWidget {
         ),
         title: Text(recipe.title),
         subtitle: Text(
-          recipe.shoppingIngredients.isEmpty
-              ? 'Không có nguyên liệu thiếu'
-              : 'Thiếu: ${recipe.shoppingIngredients.map((ShoppingIngredientSnapshot item) => item.name).join(', ')}',
+          _buildSubtitle(),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -279,6 +307,41 @@ class _PlannedRecipeTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _buildSubtitle() {
+    if (recipe.shoppingIngredients.isEmpty) {
+      return 'Không có nguyên liệu thiếu';
+    }
+
+    final List<String> missing = recipe.shoppingIngredients
+        .where(
+          (ShoppingIngredientSnapshot item) =>
+              !_isIngredientInPantry(item.name, pantryIndex),
+        )
+        .map((ShoppingIngredientSnapshot item) => item.name)
+        .toList();
+
+    if (missing.isEmpty) {
+      return 'Không có nguyên liệu thiếu';
+    }
+
+    return 'Thiếu: ${missing.join(', ')}';
+  }
+
+  bool _isIngredientInPantry(String ingredient, Set<String> pantryIndex) {
+    final String normalizedIngredient = _normalizeText(ingredient);
+    for (final String pantryItem in pantryIndex) {
+      if (normalizedIngredient.contains(pantryItem) ||
+          pantryItem.contains(normalizedIngredient)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _normalizeText(String value) {
+    return value.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 }
 

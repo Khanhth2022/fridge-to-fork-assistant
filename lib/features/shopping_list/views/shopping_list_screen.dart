@@ -152,11 +152,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                       final item = viewModel.selectedDayShoppingItems[index];
                       return Card(
                         child: ListTile(
-                          onTap: () => _showItemActions(
-                            context,
-                            viewModel,
-                            item,
-                          ),
+                          onTap: () =>
+                              _showItemActions(context, viewModel, item),
                           title: Text(item.name),
                           subtitle: Text(
                             item.displayQuantity.isEmpty
@@ -164,11 +161,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                 : item.displayQuantity,
                           ),
                           trailing: IconButton(
-                            onPressed: () => _showItemActions(
-                              context,
-                              viewModel,
-                              item,
-                            ),
+                            onPressed: () =>
+                                _showItemActions(context, viewModel, item),
                             icon: const Icon(Icons.more_vert),
                             tooltip: 'Tùy chọn',
                           ),
@@ -194,34 +188,32 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     MealPlannerViewModel viewModel,
     ShoppingItemModel item,
   ) async {
-    final _ShoppingItemAction? action = await showModalBottomSheet<
-      _ShoppingItemAction
-    >(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.kitchen_outlined),
-                title: const Text('Thêm vào tủ bếp'),
-                onTap: () => Navigator.of(context).pop(
-                  _ShoppingItemAction.addToPantry,
-                ),
+    final _ShoppingItemAction? action =
+        await showModalBottomSheet<_ShoppingItemAction>(
+          context: context,
+          builder: (BuildContext context) {
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  ListTile(
+                    leading: const Icon(Icons.kitchen_outlined),
+                    title: const Text('Thêm vào tủ bếp'),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_ShoppingItemAction.addToPantry),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.delete_outline),
+                    title: const Text('Xóa khỏi danh sách'),
+                    onTap: () =>
+                        Navigator.of(context).pop(_ShoppingItemAction.delete),
+                  ),
+                ],
               ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Xóa khỏi danh sách'),
-                onTap: () => Navigator.of(context).pop(
-                  _ShoppingItemAction.delete,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
-      },
-    );
 
     if (action == null || !context.mounted) {
       return;
@@ -247,10 +239,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       return;
     }
 
-    await viewModel.removeShoppingItem(
-      viewModel.selectedDate,
-      item.itemId,
-    );
+    await viewModel.removeShoppingItem(viewModel.selectedDate, item.itemId);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Đã xóa "${item.name}" khỏi danh sách.')),
