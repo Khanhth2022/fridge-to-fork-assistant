@@ -32,6 +32,8 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   late final ValueListenable<Box<PantryItemModel>> _pantryListenable;
   bool _followPantry = true;
   String _lastPantryKey = '';
+  List<String> _pantryIngredients = <String>[];
+  Set<String> _selectedIngredientKeys = <String>{};
 
   @override
   void initState() {
@@ -47,9 +49,13 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     final List<String> seedIngredients =
         widget.pantryIngredients ?? const <String>[];
     if (seedIngredients.isNotEmpty) {
-      _viewModel.updateMockPantryIngredients(seedIngredients);
       _viewModel.updateReferencePantryIngredients(seedIngredients);
-      _viewModel.fetchRecipes(pantryIngredients: seedIngredients);
+      _pantryIngredients = List<String>.from(seedIngredients)..sort();
+      _selectedIngredientKeys = _pantryIngredients
+          .map(_normalizeIngredient)
+          .where((String value) => value.isNotEmpty)
+          .toSet();
+      _applySelectionAndFetch();
     } else {
       _syncPantryIngredientsFromBox();
     }
@@ -71,7 +77,8 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
         .map((PantryItemModel item) => item.name.trim())
         .where((String name) => name.isNotEmpty)
         .toSet()
-        .toList();
+        .toList()
+      ..sort();
 
     final String pantryKey = _buildIngredientKey(pantryNames);
     if (pantryKey == _lastPantryKey) {
@@ -81,14 +88,35 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
 
     _viewModel.updateReferencePantryIngredients(pantryNames);
 
+    final Set<String> normalizedPantry = pantryNames
+        .map(_normalizeIngredient)
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+
+    if (mounted) {
+      setState(() {
+        _pantryIngredients = pantryNames;
+        if (_followPantry && _selectedIngredientKeys.isEmpty) {
+          _selectedIngredientKeys = normalizedPantry;
+        } else {
+          _selectedIngredientKeys =
+              _selectedIngredientKeys.intersection(normalizedPantry);
+        }
+      });
+    } else {
+      _pantryIngredients = pantryNames;
+      if (_followPantry && _selectedIngredientKeys.isEmpty) {
+        _selectedIngredientKeys = normalizedPantry;
+      } else {
+        _selectedIngredientKeys =
+            _selectedIngredientKeys.intersection(normalizedPantry);
+      }
+    }
+
     final bool shouldFollowPantry =
         widget.isPantrySuggestionWindow || _followPantry;
     if (shouldFollowPantry) {
-      _viewModel.updateMockPantryIngredients(pantryNames);
-      _viewModel.fetchRecipes(
-        pantryIngredients: pantryNames,
-        forceRefresh: forceFetch,
-      );
+      _applySelectionAndFetch(forceFetch: forceFetch);
     }
   }
 
@@ -100,6 +128,42 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
             .toList()
           ..sort();
     return normalized.join('|');
+  }
+
+  void _applySelectionAndFetch({bool forceFetch = false}) {
+    final List<String> selected = _selectedIngredientKeys.isEmpty
+        ? <String>[]
+        : _pantryIngredients
+            .where(
+              (String name) =>
+                  _selectedIngredientKeys.contains(_normalizeIngredient(name)),
+            )
+            .toList();
+
+    _viewModel.updateRequiredQueryIngredients(selected);
+    _viewModel.fetchRecipes(
+      pantryIngredients: selected,
+      forceRefresh: forceFetch,
+    );
+  }
+
+  void _toggleIngredient(String ingredient) {
+    final String key = _normalizeIngredient(ingredient);
+    if (key.isEmpty) {
+      return;
+    }
+    setState(() {
+      if (_selectedIngredientKeys.contains(key)) {
+        _selectedIngredientKeys.remove(key);
+      } else {
+        _selectedIngredientKeys.add(key);
+      }
+    });
+    _applySelectionAndFetch(forceFetch: true);
+  }
+
+  String _normalizeIngredient(String value) {
+    return value.toLowerCase().trim();
   }
 
   @override
@@ -123,10 +187,12 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
           return Column(
             children: <Widget>[
               _PantryIngredientsBar(
-                viewModel: _viewModel,
+                ingredients: _pantryIngredients,
+                selectedIngredientKeys: _selectedIngredientKeys,
                 allowManualEdit: !widget.isPantrySuggestionWindow,
                 isPantrySuggestionWindow: widget.isPantrySuggestionWindow,
                 onManualUpdate: _handleManualIngredientsUpdate,
+                onToggleIngredient: _toggleIngredient,
               ),
               _FiltersBar(viewModel: _viewModel),
               if (_viewModel.isLoading)
@@ -142,7 +208,11 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
               showCalendar: false,
               showBottomNav: false,
             )
-          : const PlannerFooter(currentIndex: 1, showCalendar: false),
+          : const PlannerFooter(
+              currentIndex: 1,
+              showCalendar: false,
+              showBottomNav: false,
+            ),
     );
   }
 
@@ -225,28 +295,42 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   void _handleManualIngredientsUpdate(List<String> ingredients) {
     if (ingredients.isEmpty) {
       _followPantry = true;
+      setState(() {
+        _pantryIngredients = <String>[];
+        _selectedIngredientKeys = <String>{};
+      });
       _syncPantryIngredientsFromBox(forceFetch: true);
       return;
     }
 
     _followPantry = false;
-    _viewModel.updateMockPantryIngredients(ingredients);
-    _viewModel.fetchRecipes(pantryIngredients: ingredients);
+    setState(() {
+      _pantryIngredients = List<String>.from(ingredients)..sort();
+      _selectedIngredientKeys = _pantryIngredients
+          .map(_normalizeIngredient)
+          .where((String value) => value.isNotEmpty)
+          .toSet();
+    });
+    _applySelectionAndFetch(forceFetch: true);
   }
 }
 
 class _PantryIngredientsBar extends StatelessWidget {
   const _PantryIngredientsBar({
-    required this.viewModel,
+    required this.ingredients,
+    required this.selectedIngredientKeys,
     required this.allowManualEdit,
     required this.isPantrySuggestionWindow,
     required this.onManualUpdate,
+    required this.onToggleIngredient,
   });
 
-  final RecipeViewModel viewModel;
+  final List<String> ingredients;
+  final Set<String> selectedIngredientKeys;
   final bool allowManualEdit;
   final bool isPantrySuggestionWindow;
   final ValueChanged<List<String>> onManualUpdate;
+  final ValueChanged<String> onToggleIngredient;
 
   @override
   Widget build(BuildContext context) {
@@ -270,15 +354,15 @@ class _PantryIngredientsBar extends StatelessWidget {
               if (allowManualEdit)
                 TextButton.icon(
                   onPressed: () =>
-                      _showEditIngredientsDialog(context, viewModel),
+                      _showEditIngredientsDialog(context, ingredients),
                   icon: Icon(
-                    viewModel.mockPantryIngredients.isEmpty
+                    ingredients.isEmpty
                         ? Icons.add
                         : Icons.edit,
                     size: 16,
                   ),
                   label: Text(
-                    viewModel.mockPantryIngredients.isEmpty ? 'Thêm' : 'Sửa',
+                    ingredients.isEmpty ? 'Thêm' : 'Sửa',
                   ),
                 ),
             ],
@@ -286,10 +370,14 @@ class _PantryIngredientsBar extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: viewModel.mockPantryIngredients
+            children: ingredients
                 .map(
-                  (String ingredient) => Chip(
+                  (String ingredient) => FilterChip(
                     label: Text(ingredient),
+                    selected: selectedIngredientKeys.contains(
+                      _normalizeIngredient(ingredient),
+                    ),
+                    onSelected: (_) => onToggleIngredient(ingredient),
                     visualDensity: VisualDensity.compact,
                   ),
                 )
@@ -300,9 +388,12 @@ class _PantryIngredientsBar extends StatelessWidget {
     );
   }
 
-  void _showEditIngredientsDialog(BuildContext context, RecipeViewModel vm) {
+  void _showEditIngredientsDialog(
+    BuildContext context,
+    List<String> ingredients,
+  ) {
     final TextEditingController controller = TextEditingController(
-      text: vm.mockPantryIngredients.join(', '),
+      text: ingredients.join(', '),
     );
 
     showDialog<void>(
@@ -339,6 +430,10 @@ class _PantryIngredientsBar extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _normalizeIngredient(String value) {
+    return value.toLowerCase().trim();
   }
 }
 

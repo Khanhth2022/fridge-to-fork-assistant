@@ -15,10 +15,6 @@ class BottomNavBar extends StatelessWidget {
       items: [
         BottomNavigationBarItem(icon: const Icon(Icons.home), label: 'Tủ bếp'),
         BottomNavigationBarItem(
-          icon: const Icon(Icons.restaurant),
-          label: 'Công thức',
-        ),
-        BottomNavigationBarItem(
           icon: const Icon(Icons.calendar_month),
           label: 'Lên menu',
         ),
@@ -39,12 +35,9 @@ class BottomNavBar extends StatelessWidget {
         context.go(RouteNames.pantryScreen);
         break;
       case 1:
-        context.go(RouteNames.recipesListScreen);
-        break;
-      case 2:
         context.go(RouteNames.mealPlanner);
         break;
-      case 3:
+      case 2:
         context.go(RouteNames.shoppingListScreen);
         break;
     }

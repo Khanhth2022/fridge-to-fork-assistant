@@ -40,6 +40,7 @@ class RecipeViewModel extends ChangeNotifier {
   String? _errorMessage;
   String _lastFetchedIngredientKey = '';
   List<String> _currentQueryIngredients = <String>[];
+  List<String> _requiredQueryIngredients = <String>[];
   bool _usePantryFallbackStrategy = false;
 
   String? _selectedDiet;
@@ -311,6 +312,14 @@ class RecipeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateRequiredQueryIngredients(List<String> ingredients) {
+    _requiredQueryIngredients = _sanitizeIngredients(ingredients);
+    if (_allFetchedRecipes.isNotEmpty) {
+      _applyFiltersAndSort();
+    }
+    notifyListeners();
+  }
+
   Future<void> searchRecipesByKeyword(String keyword) async {
     final String normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
@@ -571,19 +580,27 @@ class RecipeViewModel extends ChangeNotifier {
   }
 
   void _applyFiltersAndSort() {
+    List<Recipe> baseFiltered;
     if (_isKeywordSearchMode) {
-      _recipes = List<Recipe>.from(_allFetchedRecipes);
-      return;
+      baseFiltered = List<Recipe>.from(_allFetchedRecipes);
+    } else {
+      baseFiltered = _allFetchedRecipes.where(_matchesNonPantryFilters).toList()
+        ..sort(_sortByPantryUsefulness);
     }
 
-    final List<Recipe> baseFiltered =
-        _allFetchedRecipes.where(_matchesNonPantryFilters).toList()
-          ..sort(_sortByPantryUsefulness);
+    if (_requiredQueryIngredients.isNotEmpty) {
+      baseFiltered = baseFiltered
+          .where(_matchesRequiredIngredients)
+          .toList();
+    }
 
     _recipes = baseFiltered;
   }
 
   bool _matchesNonPantryFilters(Recipe recipe) {
+    if (!_matchesRequiredIngredients(recipe)) {
+      return false;
+    }
     if (_maxReadyTime != null) {
       if (recipe.readyInMinutes == null) {
         return false;
@@ -625,6 +642,30 @@ class RecipeViewModel extends ChangeNotifier {
 
     if (_selectedHealth != null && _selectedHealth!.isNotEmpty) {
       if (!_matchesByAny(recipe.healthLabels, _selectedHealth!)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool _matchesRequiredIngredients(Recipe recipe) {
+    if (_requiredQueryIngredients.isEmpty) {
+      return true;
+    }
+
+    final List<String> requiredIngredients = _requiredIngredients(recipe);
+    if (requiredIngredients.isEmpty) {
+      return false;
+    }
+
+    final Set<String> normalizedRecipe = requiredIngredients
+        .map(_normalizeIngredient)
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+
+    for (final String required in _requiredQueryIngredients) {
+      if (!_isInPantry(required, normalizedRecipe)) {
         return false;
       }
     }

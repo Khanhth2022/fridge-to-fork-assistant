@@ -130,7 +130,7 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
                 ),
               ],
             ),
-      bottomNavigationBar: const PlannerFooter(currentIndex: 2),
+      bottomNavigationBar: const PlannerFooter(currentIndex: 1),
     );
   }
 
