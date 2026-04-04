@@ -111,8 +111,14 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
                               (PlannedRecipe recipe) => _PlannedRecipeTile(
                                 recipe: recipe,
                                 pantryIndex: pantryIndex,
-                                onRemove: () => viewModel
-                                    .removeRecipeFromSelectedDate(
+                                onTap: () => _handlePlannedRecipeTap(
+                                  context,
+                                  viewModel,
+                                  recipe,
+                                  pantryIndex,
+                                ),
+                                onRemove: () =>
+                                    viewModel.removeRecipeFromSelectedDate(
                                       recipe.recipeId,
                                     ),
                               ),
@@ -184,6 +190,100 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
         .map((String item) => item.trim())
         .where((String item) => item.isNotEmpty)
         .toList();
+  }
+
+  Future<void> _handlePlannedRecipeTap(
+    BuildContext context,
+    MealPlannerViewModel viewModel,
+    PlannedRecipe recipe,
+    Set<String> pantryIndex,
+  ) async {
+    final List<ShoppingIngredientSnapshot> missing = _missingFromPantry(
+      recipe,
+      pantryIndex,
+    );
+
+    if (missing.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không có nguyên liệu thiếu để thêm.')),
+      );
+      return;
+    }
+
+    final String missingText = missing
+        .map((ShoppingIngredientSnapshot item) => item.name)
+        .join(', ');
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Thêm vào mua sắm?'),
+          content: Text(
+            'Món "${recipe.title}" còn thiếu: $missingText. Bạn muốn thêm vào danh sách mua sắm không?',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Không'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Thêm'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    final bool added = await viewModel.addMissingIngredientsToShopping(
+      viewModel.selectedDate,
+      recipe,
+      missing,
+    );
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          added
+              ? 'Đã thêm nguyên liệu thiếu vào danh sách mua sắm.'
+              : 'Không thể thêm nguyên liệu vào danh sách.',
+        ),
+      ),
+    );
+  }
+
+  List<ShoppingIngredientSnapshot> _missingFromPantry(
+    PlannedRecipe recipe,
+    Set<String> pantryIndex,
+  ) {
+    if (recipe.shoppingIngredients.isEmpty) {
+      return const <ShoppingIngredientSnapshot>[];
+    }
+
+    return recipe.shoppingIngredients
+        .where(
+          (ShoppingIngredientSnapshot item) =>
+              !_isIngredientInPantry(item.name, pantryIndex),
+        )
+        .toList();
+  }
+
+  bool _isIngredientInPantry(String ingredient, Set<String> pantryIndex) {
+    final String normalizedIngredient = _normalizeText(ingredient);
+    for (final String pantryItem in pantryIndex) {
+      if (normalizedIngredient.contains(pantryItem) ||
+          pantryItem.contains(normalizedIngredient)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static String _normalizeText(String value) {
@@ -266,11 +366,13 @@ class _PlannedRecipeTile extends StatelessWidget {
   const _PlannedRecipeTile({
     required this.recipe,
     required this.pantryIndex,
+    required this.onTap,
     required this.onRemove,
   });
 
   final PlannedRecipe recipe;
   final Set<String> pantryIndex;
+  final VoidCallback onTap;
   final VoidCallback onRemove;
 
   @override
@@ -278,6 +380,7 @@ class _PlannedRecipeTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
+        onTap: onTap,
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: recipe.imageUrl.isEmpty

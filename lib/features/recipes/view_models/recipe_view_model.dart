@@ -29,6 +29,8 @@ class RecipeViewModel extends ChangeNotifier {
   final List<String> _mockPantryIngredients = <String>[];
 
   final List<String> _referencePantryIngredients = <String>[];
+  final List<String> _mainPantryIngredients = <String>[];
+  final List<String> _subPantryIngredients = <String>[];
 
   List<Recipe> _recipes = <Recipe>[];
   List<Recipe> _allFetchedRecipes = <Recipe>[];
@@ -37,6 +39,8 @@ class RecipeViewModel extends ChangeNotifier {
   bool _isDetailLoading = false;
   String? _errorMessage;
   String _lastFetchedIngredientKey = '';
+  List<String> _currentQueryIngredients = <String>[];
+  bool _usePantryFallbackStrategy = false;
 
   String? _selectedDiet;
   String? _selectedHealth;
@@ -45,16 +49,29 @@ class RecipeViewModel extends ChangeNotifier {
   String? _selectedDishType;
   int? _maxReadyTime;
   int? _maxCalories;
+  bool _isKeywordSearchMode = false;
 
   List<Recipe> get recipes => _recipes;
   Recipe? get selectedRecipe => _selectedRecipe;
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMoreRecipes => _hasMoreRecipes;
   bool get isDetailLoading => _isDetailLoading;
   String? get errorMessage => _errorMessage;
   List<String> get mockPantryIngredients =>
       List<String>.unmodifiable(_mockPantryIngredients);
   List<String> get referencePantryIngredients =>
       List<String>.unmodifiable(_referencePantryIngredients);
+  List<String> get mainPantryIngredients =>
+      List<String>.unmodifiable(_mainPantryIngredients);
+  List<String> get subPantryIngredients =>
+      List<String>.unmodifiable(_subPantryIngredients);
+  List<String> get _activePantryIngredients {
+    if (_mockPantryIngredients.isNotEmpty) {
+      return _mockPantryIngredients;
+    }
+    return _referencePantryIngredients;
+  }
 
   String? get selectedDiet => _selectedDiet;
   String? get selectedHealth => _selectedHealth;
@@ -63,6 +80,7 @@ class RecipeViewModel extends ChangeNotifier {
   String? get selectedDishType => _selectedDishType;
   int? get maxReadyTime => _maxReadyTime;
   int? get maxCalories => _maxCalories;
+  bool get isKeywordSearchMode => _isKeywordSearchMode;
 
   static const List<String> dietOptions = <String>[
     'balanced',
@@ -127,17 +145,31 @@ class RecipeViewModel extends ChangeNotifier {
   ];
 
   static const int _nearEnoughThreshold = 2;
+  static const int _pageSize = 12;
 
-  Future<void> loadInitialSuggestions() async {
-    await fetchRecipes();
+  bool _isLoadingMore = false;
+  bool _hasMoreRecipes = true;
+  int _nextFetchOffset = 0;
+  final Map<int, int> _priorityRecipeOrder = <int, int>{};
+
+  Future<void> loadInitialSuggestions({bool? usePantryFallbackStrategy}) async {
+    await fetchRecipes(usePantryFallbackStrategy: usePantryFallbackStrategy);
   }
 
   Future<void> fetchRecipes({
     List<String>? pantryIngredients,
     bool forceRefresh = false,
+    bool? usePantryFallbackStrategy,
   }) async {
+    if (usePantryFallbackStrategy != null) {
+      _usePantryFallbackStrategy = usePantryFallbackStrategy;
+    }
+
     final List<String> ingredients = _sanitizeIngredients(
-      pantryIngredients ?? _mockPantryIngredients,
+      pantryIngredients ??
+          (_currentQueryIngredients.isNotEmpty
+              ? _currentQueryIngredients
+              : _activePantryIngredients),
     );
     final String ingredientKey = _buildIngredientKey(ingredients);
 
@@ -149,32 +181,61 @@ class RecipeViewModel extends ChangeNotifier {
       return;
     }
 
+    _resetPagingState();
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final List<Recipe> fetched = await _apiClient.getRecipeSuggestions(
-        pantryIngredients: ingredients,
-        cuisine: _selectedCuisine,
-        mealType: _selectedMealType,
-        dishType: _selectedDishType,
-        diet: _selectedDiet,
-        health: _selectedHealth,
-        maxReadyTime: _maxReadyTime,
-        maxCalories: _maxCalories,
-        number: 24,
+      await _fetchNextPage(
+        ingredients,
+        usePantryFallbackStrategy: _usePantryFallbackStrategy,
       );
-
-      _allFetchedRecipes = fetched;
-      _lastFetchedIngredientKey = ingredientKey;
-      _applyFiltersAndSort();
     } catch (error) {
       _errorMessage = error.toString().replaceFirst('Exception: ', '');
       _allFetchedRecipes = <Recipe>[];
       _recipes = <Recipe>[];
+      _hasMoreRecipes = false;
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreRecipes() async {
+    if (_isLoading || _isLoadingMore || !_hasMoreRecipes) {
+      return;
+    }
+
+    final List<String> ingredients = _sanitizeIngredients(
+      _currentQueryIngredients.isNotEmpty
+          ? _currentQueryIngredients
+          : _activePantryIngredients,
+    );
+    if (ingredients.isEmpty) {
+      _hasMoreRecipes = false;
+      notifyListeners();
+      return;
+    }
+
+    final String ingredientKey = _buildIngredientKey(ingredients);
+    if (ingredientKey != _lastFetchedIngredientKey) {
+      await fetchRecipes(
+        forceRefresh: true,
+        usePantryFallbackStrategy: _usePantryFallbackStrategy,
+      );
+      return;
+    }
+
+    _isLoadingMore = true;
+    notifyListeners();
+
+    try {
+      await _fetchNextPage(ingredients, usePantryFallbackStrategy: false);
+    } catch (_) {
+      // Keep current list visible when loading additional pages fails.
+    } finally {
+      _isLoadingMore = false;
       notifyListeners();
     }
   }
@@ -250,6 +311,54 @@ class RecipeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> searchRecipesByKeyword(String keyword) async {
+    final String normalizedKeyword = keyword.trim();
+    if (normalizedKeyword.isEmpty) {
+      return;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    _isKeywordSearchMode = true;
+    notifyListeners();
+
+    try {
+      final RecipeSuggestionPage page = await _apiClient
+          .searchRecipesByKeywordPage(
+            keyword: normalizedKeyword,
+            pantryIngredients: _referencePantryIngredients.isNotEmpty
+                ? _referencePantryIngredients
+                : _activePantryIngredients,
+            from: 0,
+            number: _pageSize,
+          );
+
+      _allFetchedRecipes = List<Recipe>.from(page.recipes);
+      _recipes = List<Recipe>.from(page.recipes);
+      _currentQueryIngredients = <String>[normalizedKeyword];
+      _lastFetchedIngredientKey = _buildIngredientKey(<String>[
+        normalizedKeyword,
+      ]);
+      _nextFetchOffset = _pageSize;
+      _hasMoreRecipes = false;
+      _isLoadingMore = false;
+      _priorityRecipeOrder.clear();
+    } catch (error) {
+      _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      _allFetchedRecipes = <Recipe>[];
+      _recipes = <Recipe>[];
+      _hasMoreRecipes = false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> clearKeywordSearch() async {
+    _isKeywordSearchMode = false;
+    await fetchRecipes(forceRefresh: true, usePantryFallbackStrategy: false);
+  }
+
   void updateMockPantryIngredients(List<String> ingredients) {
     _mockPantryIngredients
       ..clear()
@@ -261,6 +370,23 @@ class RecipeViewModel extends ChangeNotifier {
     _referencePantryIngredients
       ..clear()
       ..addAll(_sanitizeIngredients(ingredients));
+
+    if (_allFetchedRecipes.isNotEmpty) {
+      _applyFiltersAndSort();
+    }
+    notifyListeners();
+  }
+
+  void updateClassifiedPantryIngredients({
+    required List<String> mainIngredients,
+    required List<String> subIngredients,
+  }) {
+    _mainPantryIngredients
+      ..clear()
+      ..addAll(_sanitizeIngredients(mainIngredients));
+    _subPantryIngredients
+      ..clear()
+      ..addAll(_sanitizeIngredients(subIngredients));
 
     if (_allFetchedRecipes.isNotEmpty) {
       _applyFiltersAndSort();
@@ -307,7 +433,157 @@ class RecipeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _matchesCurrentFilters(Recipe recipe) {
+  bool _matchesByAny(List<String> values, String selected) {
+    if (values.isEmpty) {
+      return true;
+    }
+
+    final String normalizedSelected = _normalizeIngredient(selected);
+    return values.any((String value) {
+      final String normalizedValue = _normalizeIngredient(value);
+      return normalizedValue == normalizedSelected ||
+          normalizedValue.contains(normalizedSelected) ||
+          normalizedSelected.contains(normalizedValue);
+    });
+  }
+
+  bool _isCookableOrNearEnough(Recipe recipe) {
+    return recipe.totalIngredientCount > 0;
+  }
+
+  int _sortByPantryUsefulness(Recipe a, Recipe b) {
+    if (_usePantryFallbackStrategy) {
+      final int? priorityIndexA = _priorityRecipeOrder[a.id];
+      final int? priorityIndexB = _priorityRecipeOrder[b.id];
+      if (priorityIndexA != null && priorityIndexB != null) {
+        return priorityIndexA.compareTo(priorityIndexB);
+      }
+      if (priorityIndexA != null) {
+        return -1;
+      }
+      if (priorityIndexB != null) {
+        return 1;
+      }
+
+      final int scoreA = _computePantryScore(a);
+      final int scoreB = _computePantryScore(b);
+      final int scoreCompare = scoreB.compareTo(scoreA);
+      if (scoreCompare != 0) {
+        return scoreCompare;
+      }
+    }
+
+    final PantryMatchResult matchA = getPantryMatchForRecipe(a);
+    final PantryMatchResult matchB = getPantryMatchForRecipe(b);
+
+    if (matchA.isFullMatch != matchB.isFullMatch) {
+      return matchA.isFullMatch ? -1 : 1;
+    }
+
+    final int missingCompare = matchA.missingIngredientCount.compareTo(
+      matchB.missingIngredientCount,
+    );
+    if (missingCompare != 0) {
+      return missingCompare;
+    }
+
+    final double availableRatioA = matchA.totalIngredientCount == 0
+        ? 0
+        : matchA.availableIngredientCount / matchA.totalIngredientCount;
+    final double availableRatioB = matchB.totalIngredientCount == 0
+        ? 0
+        : matchB.availableIngredientCount / matchB.totalIngredientCount;
+    final int ratioCompare = availableRatioB.compareTo(availableRatioA);
+    if (ratioCompare != 0) {
+      return ratioCompare;
+    }
+
+    return b.usedIngredientCount.compareTo(a.usedIngredientCount);
+  }
+
+  int _computePantryScore(Recipe recipe) {
+    final List<String> requiredIngredients = _requiredIngredients(recipe);
+    if (requiredIngredients.isEmpty) {
+      return 0;
+    }
+
+    final Set<String> normalizedMain = _mainPantryIngredients
+        .map(_normalizeIngredient)
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+    final Set<String> normalizedSub = _subPantryIngredients
+        .map(_normalizeIngredient)
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+
+    if (normalizedMain.isEmpty && normalizedSub.isEmpty) {
+      return 0;
+    }
+
+    int mainUsed = 0;
+    int subUsed = 0;
+    int mainMissing = 0;
+    int subMissing = 0;
+
+    for (final String ingredient in requiredIngredients) {
+      final bool inMain = _isInPantry(ingredient, normalizedMain);
+      final bool inSub = _isInPantry(ingredient, normalizedSub);
+
+      if (inMain) {
+        mainUsed++;
+      } else if (inSub) {
+        subUsed++;
+      } else {
+        final bool shouldTreatAsMain = _looksLikeMainIngredient(
+          ingredient,
+          normalizedMain,
+        );
+        if (shouldTreatAsMain) {
+          mainMissing++;
+        } else {
+          subMissing++;
+        }
+      }
+    }
+
+    return (mainUsed * 4) +
+        (subUsed * 1) -
+        (mainMissing * 3) -
+        (subMissing * 1);
+  }
+
+  bool _looksLikeMainIngredient(String ingredient, Set<String> normalizedMain) {
+    final List<String> tokens = _normalizeIngredient(ingredient)
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((String token) => token.length >= 3)
+        .toList();
+    if (tokens.isEmpty) {
+      return false;
+    }
+    return normalizedMain.any((String mainItem) {
+      for (final String token in tokens) {
+        if (mainItem.contains(token)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  void _applyFiltersAndSort() {
+    if (_isKeywordSearchMode) {
+      _recipes = List<Recipe>.from(_allFetchedRecipes);
+      return;
+    }
+
+    final List<Recipe> baseFiltered =
+        _allFetchedRecipes.where(_matchesNonPantryFilters).toList()
+          ..sort(_sortByPantryUsefulness);
+
+    _recipes = baseFiltered;
+  }
+
+  bool _matchesNonPantryFilters(Recipe recipe) {
     if (_maxReadyTime != null) {
       if (recipe.readyInMinutes == null) {
         return false;
@@ -353,53 +629,15 @@ class RecipeViewModel extends ChangeNotifier {
       }
     }
 
-    return _isCookableOrNearEnough(recipe);
-  }
-
-  bool _matchesByAny(List<String> values, String selected) {
-    if (values.isEmpty) {
-      return true;
-    }
-
-    final String normalizedSelected = _normalizeIngredient(selected);
-    return values.any((String value) {
-      final String normalizedValue = _normalizeIngredient(value);
-      return normalizedValue == normalizedSelected ||
-          normalizedValue.contains(normalizedSelected) ||
-          normalizedSelected.contains(normalizedValue);
-    });
-  }
-
-  bool _isCookableOrNearEnough(Recipe recipe) {
-    if (recipe.canCookFromPantry) {
-      return true;
-    }
-    return recipe.missedIngredientCount > 0 &&
-        recipe.missedIngredientCount <= _nearEnoughThreshold;
-  }
-
-  int _sortByPantryUsefulness(Recipe a, Recipe b) {
-    if (a.canCookFromPantry != b.canCookFromPantry) {
-      return a.canCookFromPantry ? -1 : 1;
-    }
-
-    final int missingCompare = a.missedIngredientCount.compareTo(
-      b.missedIngredientCount,
-    );
-    if (missingCompare != 0) {
-      return missingCompare;
-    }
-
-    return b.usedIngredientCount.compareTo(a.usedIngredientCount);
-  }
-
-  void _applyFiltersAndSort() {
-    _recipes = _allFetchedRecipes.where(_matchesCurrentFilters).toList()
-      ..sort(_sortByPantryUsefulness);
+    return true;
   }
 
   Set<String> _normalizedReferencePantry() {
-    return _referencePantryIngredients
+    final List<String> source = _referencePantryIngredients.isNotEmpty
+        ? _referencePantryIngredients
+        : _activePantryIngredients;
+
+    return source
         .map(_normalizeIngredient)
         .where((String value) => value.isNotEmpty)
         .toSet();
@@ -475,5 +713,69 @@ class RecipeViewModel extends ChangeNotifier {
 
   String _normalizeIngredient(String value) {
     return value.toLowerCase().trim();
+  }
+
+  void _resetPagingState() {
+    _allFetchedRecipes = <Recipe>[];
+    _recipes = <Recipe>[];
+    _nextFetchOffset = 0;
+    _hasMoreRecipes = true;
+    _isLoadingMore = false;
+    _priorityRecipeOrder.clear();
+  }
+
+  Future<void> _fetchNextPage(
+    List<String> ingredients, {
+    required bool usePantryFallbackStrategy,
+  }) async {
+    final RecipeSuggestionPage page = await _apiClient.getRecipeSuggestionsPage(
+      pantryIngredients: ingredients,
+      mainIngredients: _mainPantryIngredients,
+      subIngredients: _subPantryIngredients,
+      cuisine: _selectedCuisine,
+      mealType: _selectedMealType,
+      dishType: _selectedDishType,
+      diet: _selectedDiet,
+      health: _selectedHealth,
+      maxReadyTime: _maxReadyTime,
+      maxCalories: _maxCalories,
+      usePantryFallbackStrategy: usePantryFallbackStrategy,
+      from: _nextFetchOffset,
+      number: _pageSize,
+    );
+    if (page.priorityRecipeIds.isNotEmpty && _priorityRecipeOrder.isEmpty) {
+      int order = 0;
+      for (final int id in page.priorityRecipeIds) {
+        _priorityRecipeOrder[id] = order;
+        order++;
+      }
+    }
+    final List<Recipe> fetched = page.recipes;
+    final List<String> resolvedQueryIngredients =
+        page.queryIngredients.isNotEmpty
+        ? _sanitizeIngredients(page.queryIngredients)
+        : ingredients;
+
+    _nextFetchOffset += _pageSize;
+    _currentQueryIngredients = resolvedQueryIngredients;
+
+    if (fetched.isEmpty) {
+      _hasMoreRecipes = false;
+      _lastFetchedIngredientKey = _buildIngredientKey(resolvedQueryIngredients);
+      _applyFiltersAndSort();
+      return;
+    }
+
+    final Set<int> existingIds = _allFetchedRecipes
+        .map((Recipe recipe) => recipe.id)
+        .toSet();
+    final List<Recipe> uniqueFetched = fetched
+        .where((Recipe recipe) => !existingIds.contains(recipe.id))
+        .toList();
+
+    _allFetchedRecipes.addAll(uniqueFetched);
+    _lastFetchedIngredientKey = _buildIngredientKey(resolvedQueryIngredients);
+    _hasMoreRecipes = page.hasNext;
+    _applyFiltersAndSort();
   }
 }
