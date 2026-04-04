@@ -103,11 +103,13 @@ class MealPlannerViewModel extends ChangeNotifier {
   Future<bool> addRecipeToSelectedDate(
     Recipe recipe, {
     List<String> missingIngredients = const <String>[],
+    bool addMissingToShopping = true,
   }) {
     return addRecipeToDate(
       _selectedDate,
       recipe,
       missingIngredients: missingIngredients,
+      addMissingToShopping: addMissingToShopping,
     );
   }
 
@@ -115,6 +117,7 @@ class MealPlannerViewModel extends ChangeNotifier {
     DateTime date,
     Recipe recipe, {
     List<String> missingIngredients = const <String>[],
+    bool addMissingToShopping = true,
   }) async {
     final DateTime normalizedDate = _normalizeDate(date);
     final List<PlannedRecipe> recipes = List<PlannedRecipe>.from(
@@ -127,10 +130,13 @@ class MealPlannerViewModel extends ChangeNotifier {
 
     final List<ShoppingIngredientSnapshot> shoppingIngredients =
         _buildShoppingIngredientSnapshots(recipe, missingIngredients);
+    final List<ShoppingIngredientSnapshot> allIngredients =
+        _buildAllIngredientSnapshots(recipe);
 
     recipes.add(
       PlannedRecipe.fromRecipe(
         recipe,
+        allIngredients: allIngredients,
         shoppingIngredients: shoppingIngredients,
       ),
     );
@@ -138,7 +144,7 @@ class MealPlannerViewModel extends ChangeNotifier {
     _plannedRecipesByDate[_dateKey(normalizedDate)] = recipes;
     await _repository.savePlannedRecipes(normalizedDate, recipes);
 
-    if (shoppingIngredients.isNotEmpty) {
+    if (addMissingToShopping && shoppingIngredients.isNotEmpty) {
       await _addShoppingItemsForRecipe(
         normalizedDate,
         recipe.id.toString(),
@@ -192,11 +198,21 @@ class MealPlannerViewModel extends ChangeNotifier {
 
     final List<ShoppingIngredientSnapshot> shoppingIngredients =
         <ShoppingIngredientSnapshot>[];
+    final List<ShoppingIngredientSnapshot> allIngredients =
+        <ShoppingIngredientSnapshot>[];
     for (final String ingredient in ingredientNames) {
       final String cleanedIngredient = ingredient.trim();
       if (cleanedIngredient.isEmpty) {
         continue;
       }
+
+      allIngredients.add(
+        ShoppingIngredientSnapshot(
+          name: cleanedIngredient,
+          quantity: 1,
+          unit: '',
+        ),
+      );
 
       final String normalizedIngredient = _normalizeText(cleanedIngredient);
       final bool available = pantryIndex.any(
@@ -223,6 +239,7 @@ class MealPlannerViewModel extends ChangeNotifier {
         imageUrl: '',
         addedAtUtcMs: DateTime.now().toUtc().millisecondsSinceEpoch,
         summary: 'Món ăn tự thêm',
+        allIngredients: allIngredients,
         shoppingIngredients: shoppingIngredients,
       ),
     );
@@ -481,6 +498,52 @@ class MealPlannerViewModel extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> completePlannedRecipe(
+    DateTime date,
+    PlannedRecipe recipe,
+  ) async {
+    final List<ShoppingIngredientSnapshot> ingredients = recipe.allIngredients;
+    if (ingredients.isEmpty) {
+      await removeRecipeFromDate(date, recipe.recipeId);
+      return false;
+    }
+
+    final List<PantryItemModel> pantryItems =
+        await _pantryRepository.getAllItems();
+
+    for (int i = 0; i < ingredients.length; i++) {
+      final ShoppingIngredientSnapshot ingredient = ingredients[i];
+      final String normalizedName = _normalizeText(ingredient.name);
+      if (normalizedName.isEmpty) {
+        continue;
+      }
+
+      final int index = pantryItems.indexWhere((PantryItemModel item) {
+        return _normalizeText(item.name) == normalizedName &&
+            _unitMatches(ingredient.unit, item.unit);
+      });
+      if (index == -1) {
+        continue;
+      }
+
+      final PantryItemModel item = pantryItems[index];
+      final double used = ingredient.quantity > 0 ? ingredient.quantity : 1;
+      final double remaining = item.quantity - used;
+
+      if (remaining <= 0) {
+        await _pantryRepository.deleteItem(item.itemId);
+        pantryItems.removeAt(index);
+      } else {
+        final PantryItemModel updated = item.copyWith(quantity: remaining);
+        pantryItems[index] = updated;
+        await _pantryRepository.updateItem(item.itemId, updated);
+      }
+    }
+
+    await removeRecipeFromDate(date, recipe.recipeId);
+    return true;
+  }
+
   Future<bool> removeShoppingItem(DateTime date, String itemId) async {
     final DateTime normalizedDate = _normalizeDate(date);
     final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
@@ -708,6 +771,63 @@ class MealPlannerViewModel extends ChangeNotifier {
       return null;
     }
     return value.toDouble();
+  }
+
+  static bool _unitMatches(String candidate, String current) {
+    final String left = _normalizeText(candidate);
+    final String right = _normalizeText(current);
+    if (left.isEmpty || right.isEmpty) {
+      return true;
+    }
+    return left == right;
+  }
+
+  List<ShoppingIngredientSnapshot> _buildAllIngredientSnapshots(Recipe recipe) {
+    final List<ShoppingIngredientSnapshot> snapshots =
+        <ShoppingIngredientSnapshot>[];
+
+    for (final RecipeIngredient ingredient in recipe.ingredients) {
+      final String name = ingredient.name.trim().isNotEmpty
+          ? ingredient.name
+          : ingredient.original.trim();
+      if (name.isEmpty) {
+        continue;
+      }
+
+      snapshots.add(
+        ShoppingIngredientSnapshot(
+          name: name,
+          quantity: _toQuantity(ingredient.amount) ?? 1,
+          unit: ingredient.unit?.trim() ?? '',
+        ),
+      );
+    }
+
+    if (snapshots.isNotEmpty) {
+      return snapshots;
+    }
+
+    for (final String ingredient in recipe.usedIngredients) {
+      final String name = ingredient.trim();
+      if (name.isEmpty) {
+        continue;
+      }
+      snapshots.add(
+        ShoppingIngredientSnapshot(name: name, quantity: 1, unit: ''),
+      );
+    }
+
+    for (final String ingredient in recipe.missedIngredients) {
+      final String name = ingredient.trim();
+      if (name.isEmpty) {
+        continue;
+      }
+      snapshots.add(
+        ShoppingIngredientSnapshot(name: name, quantity: 1, unit: ''),
+      );
+    }
+
+    return snapshots;
   }
 
   static String _formatFullDate(DateTime date) {

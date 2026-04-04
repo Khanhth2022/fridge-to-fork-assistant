@@ -204,8 +204,68 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
     );
 
     if (missing.isEmpty) {
+      final _MealCompletionAction? action = await showDialog<
+        _MealCompletionAction
+      >(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Món đã đủ nguyên liệu'),
+            content: Text(
+              'Bạn muốn xóa món "${recipe.title}" hay hoàn thành món này?',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Hủy'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  _MealCompletionAction.delete,
+                ),
+                child: const Text('Xóa'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  _MealCompletionAction.complete,
+                ),
+                child: const Text('Hoàn thành'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (action == null || !context.mounted) {
+        return;
+      }
+
+      if (action == _MealCompletionAction.delete) {
+        await viewModel.removeRecipeFromSelectedDate(recipe.recipeId);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đã xóa món khỏi lịch.')),
+          );
+        }
+        return;
+      }
+
+      final bool completed = await viewModel.completePlannedRecipe(
+        viewModel.selectedDate,
+        recipe,
+      );
+      if (!context.mounted) {
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không có nguyên liệu thiếu để thêm.')),
+        SnackBar(
+          content: Text(
+            completed
+                ? 'Đã hoàn thành món và trừ nguyên liệu trong kho.'
+                : 'Đã hoàn thành món, nhưng chưa trừ được nguyên liệu.',
+          ),
+        ),
       );
       return;
     }
@@ -290,6 +350,8 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
     return value.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 }
+
+enum _MealCompletionAction { delete, complete }
 
 class _CustomRecipeForm extends StatelessWidget {
   const _CustomRecipeForm({

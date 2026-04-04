@@ -264,9 +264,45 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
               );
             },
             onQuickAdd: () async {
+              final List<String> missing = pantryMatch.missingIngredients;
+              bool addMissingToShopping = true;
+
+              if (missing.isNotEmpty) {
+                final String missingText = missing.take(4).join(', ');
+                final bool? confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (dialogContext) {
+                    return AlertDialog(
+                      title: const Text('Thêm vào mua sắm?'),
+                      content: Text(
+                        'Món "${recipe.title}" còn thiếu: $missingText${missing.length > 4 ? '...' : ''}. Bạn muốn thêm vào danh sách mua sắm không?',
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text('Không'),
+                        ),
+                        FilledButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(true),
+                          child: const Text('Thêm'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+
+                if (confirmed == null) {
+                  return;
+                }
+                addMissingToShopping = confirmed;
+              }
+
               final bool added = await plannerViewModel.addRecipeToSelectedDate(
                 recipe,
-                missingIngredients: pantryMatch.missingIngredients,
+                missingIngredients: missing,
+                addMissingToShopping: addMissingToShopping,
               );
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

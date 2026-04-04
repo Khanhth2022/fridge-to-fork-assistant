@@ -10,6 +10,7 @@ class PlannedRecipe {
     this.readyInMinutes,
     this.servings,
     this.sourceUrl,
+    this.allIngredients = const <ShoppingIngredientSnapshot>[],
     this.shoppingIngredients = const <ShoppingIngredientSnapshot>[],
   });
 
@@ -21,6 +22,7 @@ class PlannedRecipe {
   final int? readyInMinutes;
   final int? servings;
   final String? sourceUrl;
+  final List<ShoppingIngredientSnapshot> allIngredients;
   final List<ShoppingIngredientSnapshot> shoppingIngredients;
 
   PlannedRecipe copyWith({
@@ -32,6 +34,7 @@ class PlannedRecipe {
     int? readyInMinutes,
     int? servings,
     String? sourceUrl,
+    List<ShoppingIngredientSnapshot>? allIngredients,
     List<ShoppingIngredientSnapshot>? shoppingIngredients,
   }) {
     return PlannedRecipe(
@@ -43,12 +46,14 @@ class PlannedRecipe {
       readyInMinutes: readyInMinutes ?? this.readyInMinutes,
       servings: servings ?? this.servings,
       sourceUrl: sourceUrl ?? this.sourceUrl,
+      allIngredients: allIngredients ?? this.allIngredients,
       shoppingIngredients: shoppingIngredients ?? this.shoppingIngredients,
     );
   }
 
   factory PlannedRecipe.fromRecipe(
     Recipe recipe, {
+    required List<ShoppingIngredientSnapshot> allIngredients,
     required List<ShoppingIngredientSnapshot> shoppingIngredients,
   }) {
     return PlannedRecipe(
@@ -60,6 +65,7 @@ class PlannedRecipe {
       readyInMinutes: recipe.readyInMinutes,
       servings: recipe.servings,
       sourceUrl: recipe.sourceUrl,
+      allIngredients: allIngredients,
       shoppingIngredients: shoppingIngredients,
     );
   }
@@ -74,6 +80,11 @@ class PlannedRecipe {
       'readyInMinutes': readyInMinutes,
       'servings': servings,
       'sourceUrl': sourceUrl,
+      'allIngredients': allIngredients.map((
+        ShoppingIngredientSnapshot item,
+      ) {
+        return item.toJson();
+      }).toList(),
       'shoppingIngredients': shoppingIngredients.map((
         ShoppingIngredientSnapshot item,
       ) {
@@ -92,6 +103,11 @@ class PlannedRecipe {
       readyInMinutes: (json['readyInMinutes'] as num?)?.toInt(),
       servings: (json['servings'] as num?)?.toInt(),
       sourceUrl: json['sourceUrl']?.toString(),
+        allIngredients:
+          (json['allIngredients'] as List<dynamic>? ?? const <dynamic>[]) 
+            .whereType<Map<String, dynamic>>()
+            .map(ShoppingIngredientSnapshot.fromJson)
+            .toList(),
       shoppingIngredients:
           (json['shoppingIngredients'] as List<dynamic>? ?? const <dynamic>[])
               .whereType<Map<String, dynamic>>()
