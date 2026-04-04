@@ -504,12 +504,13 @@ class MealPlannerViewModel extends ChangeNotifier {
   ) async {
     final List<ShoppingIngredientSnapshot> ingredients = recipe.allIngredients;
     if (ingredients.isEmpty) {
-      await removeRecipeFromDate(date, recipe.recipeId);
+      await _ensureRecipeRemoved(date, recipe);
       return false;
     }
 
-    final List<PantryItemModel> pantryItems =
-        await _pantryRepository.getAllItems();
+    final List<PantryItemModel> pantryItems = await _pantryRepository
+        .getAllItems();
+    bool deductedAny = false;
 
     for (int i = 0; i < ingredients.length; i++) {
       final ShoppingIngredientSnapshot ingredient = ingredients[i];
@@ -533,15 +534,46 @@ class MealPlannerViewModel extends ChangeNotifier {
       if (remaining <= 0) {
         await _pantryRepository.deleteItem(item.itemId);
         pantryItems.removeAt(index);
+        deductedAny = true;
       } else {
         final PantryItemModel updated = item.copyWith(quantity: remaining);
         pantryItems[index] = updated;
         await _pantryRepository.updateItem(item.itemId, updated);
+        deductedAny = true;
       }
     }
 
-    await removeRecipeFromDate(date, recipe.recipeId);
-    return true;
+    await _ensureRecipeRemoved(date, recipe);
+    return deductedAny;
+  }
+
+  Future<void> _ensureRecipeRemoved(
+    DateTime date,
+    PlannedRecipe recipe,
+  ) async {
+    final bool removed = await removeRecipeFromDate(date, recipe.recipeId);
+    if (removed) {
+      return;
+    }
+
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<PlannedRecipe> recipes = List<PlannedRecipe>.from(
+      _recipesForDate(normalizedDate),
+    );
+    final String normalizedTitle = _normalizeText(recipe.title);
+    final int index = recipes.indexWhere(
+      (PlannedRecipe item) =>
+          _normalizeText(item.title) == normalizedTitle,
+    );
+    if (index == -1) {
+      return;
+    }
+
+    final PlannedRecipe removedRecipe = recipes.removeAt(index);
+    _plannedRecipesByDate[_dateKey(normalizedDate)] = recipes;
+    await _repository.savePlannedRecipes(normalizedDate, recipes);
+    await _removeShoppingItemsForRecipe(normalizedDate, removedRecipe);
+    notifyListeners();
   }
 
   Future<bool> removeShoppingItem(DateTime date, String itemId) async {

@@ -80,9 +80,7 @@ class PlannedRecipe {
       'readyInMinutes': readyInMinutes,
       'servings': servings,
       'sourceUrl': sourceUrl,
-      'allIngredients': allIngredients.map((
-        ShoppingIngredientSnapshot item,
-      ) {
+      'allIngredients': allIngredients.map((ShoppingIngredientSnapshot item) {
         return item.toJson();
       }).toList(),
       'shoppingIngredients': shoppingIngredients.map((
@@ -103,11 +101,11 @@ class PlannedRecipe {
       readyInMinutes: (json['readyInMinutes'] as num?)?.toInt(),
       servings: (json['servings'] as num?)?.toInt(),
       sourceUrl: json['sourceUrl']?.toString(),
-        allIngredients:
-          (json['allIngredients'] as List<dynamic>? ?? const <dynamic>[]) 
-            .whereType<Map<String, dynamic>>()
-            .map(ShoppingIngredientSnapshot.fromJson)
-            .toList(),
+      allIngredients:
+          (json['allIngredients'] as List<dynamic>? ?? const <dynamic>[])
+              .whereType<Map<String, dynamic>>()
+              .map(ShoppingIngredientSnapshot.fromJson)
+              .toList(),
       shoppingIngredients:
           (json['shoppingIngredients'] as List<dynamic>? ?? const <dynamic>[])
               .whereType<Map<String, dynamic>>()

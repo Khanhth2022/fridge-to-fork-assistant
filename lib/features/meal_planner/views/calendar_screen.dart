@@ -204,37 +204,36 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
     );
 
     if (missing.isEmpty) {
-      final _MealCompletionAction? action = await showDialog<
-        _MealCompletionAction
-      >(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Món đã đủ nguyên liệu'),
-            content: Text(
-              'Bạn muốn xóa món "${recipe.title}" hay hoàn thành món này?',
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Hủy'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  _MealCompletionAction.delete,
+      final _MealCompletionAction? action =
+          await showDialog<_MealCompletionAction>(
+            context: context,
+            builder: (dialogContext) {
+              return AlertDialog(
+                title: const Text('Món đã đủ nguyên liệu'),
+                content: Text(
+                  'Bạn muốn xóa món "${recipe.title}" hay hoàn thành món này?',
                 ),
-                child: const Text('Xóa'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(
-                  _MealCompletionAction.complete,
-                ),
-                child: const Text('Hoàn thành'),
-              ),
-            ],
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Hủy'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(
+                      dialogContext,
+                    ).pop(_MealCompletionAction.delete),
+                    child: const Text('Xóa'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(
+                      dialogContext,
+                    ).pop(_MealCompletionAction.complete),
+                    child: const Text('Hoàn thành'),
+                  ),
+                ],
+              );
+            },
           );
-        },
-      );
 
       if (action == null || !context.mounted) {
         return;
