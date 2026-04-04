@@ -41,6 +41,7 @@ class RecipeViewModel extends ChangeNotifier {
   String _lastFetchedIngredientKey = '';
   List<String> _currentQueryIngredients = <String>[];
   List<String> _requiredQueryIngredients = <String>[];
+  List<String> _optionalQueryIngredients = <String>[];
   bool _usePantryFallbackStrategy = false;
 
   String? _selectedDiet;
@@ -320,6 +321,14 @@ class RecipeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateOptionalQueryIngredients(List<String> ingredients) {
+    _optionalQueryIngredients = _sanitizeIngredients(ingredients);
+    if (_allFetchedRecipes.isNotEmpty) {
+      _applyFiltersAndSort();
+    }
+    notifyListeners();
+  }
+
   Future<void> searchRecipesByKeyword(String keyword) async {
     final String normalizedKeyword = keyword.trim();
     if (normalizedKeyword.isEmpty) {
@@ -588,19 +597,15 @@ class RecipeViewModel extends ChangeNotifier {
         ..sort(_sortByPantryUsefulness);
     }
 
-    if (_requiredQueryIngredients.isNotEmpty) {
-      baseFiltered = baseFiltered
-          .where(_matchesRequiredIngredients)
-          .toList();
+    if (_requiredQueryIngredients.isNotEmpty ||
+        _optionalQueryIngredients.isNotEmpty) {
+      baseFiltered = baseFiltered.where(_matchesRequiredIngredients).toList();
     }
 
     _recipes = baseFiltered;
   }
 
   bool _matchesNonPantryFilters(Recipe recipe) {
-    if (!_matchesRequiredIngredients(recipe)) {
-      return false;
-    }
     if (_maxReadyTime != null) {
       if (recipe.readyInMinutes == null) {
         return false;
@@ -651,7 +656,7 @@ class RecipeViewModel extends ChangeNotifier {
 
   bool _matchesRequiredIngredients(Recipe recipe) {
     if (_requiredQueryIngredients.isEmpty) {
-      return true;
+      return _matchesOptionalIngredients(recipe);
     }
 
     final List<String> requiredIngredients = _requiredIngredients(recipe);
@@ -671,6 +676,30 @@ class RecipeViewModel extends ChangeNotifier {
     }
 
     return true;
+  }
+
+  bool _matchesOptionalIngredients(Recipe recipe) {
+    if (_optionalQueryIngredients.isEmpty) {
+      return true;
+    }
+
+    final List<String> requiredIngredients = _requiredIngredients(recipe);
+    if (requiredIngredients.isEmpty) {
+      return false;
+    }
+
+    final Set<String> normalizedRecipe = requiredIngredients
+        .map(_normalizeIngredient)
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+
+    for (final String optional in _optionalQueryIngredients) {
+      if (_isInPantry(optional, normalizedRecipe)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   Set<String> _normalizedReferencePantry() {
@@ -769,6 +798,31 @@ class RecipeViewModel extends ChangeNotifier {
     List<String> ingredients, {
     required bool usePantryFallbackStrategy,
   }) async {
+    if (_requiredQueryIngredients.isEmpty &&
+        _optionalQueryIngredients.isNotEmpty &&
+        !usePantryFallbackStrategy) {
+      final RecipeSuggestionPage page =
+          await _fetchAnyOfOptionalIngredientsPage();
+      _nextFetchOffset = _pageSize;
+      _currentQueryIngredients = _sanitizeIngredients(page.queryIngredients);
+
+      final List<Recipe> fetched = page.recipes;
+      if (fetched.isEmpty) {
+        _hasMoreRecipes = false;
+        _lastFetchedIngredientKey = _buildIngredientKey(
+          _currentQueryIngredients,
+        );
+        _applyFiltersAndSort();
+        return;
+      }
+
+      _allFetchedRecipes.addAll(fetched);
+      _lastFetchedIngredientKey = _buildIngredientKey(_currentQueryIngredients);
+      _hasMoreRecipes = false;
+      _applyFiltersAndSort();
+      return;
+    }
+
     final RecipeSuggestionPage page = await _apiClient.getRecipeSuggestionsPage(
       pantryIngredients: ingredients,
       mainIngredients: _mainPantryIngredients,
@@ -818,5 +872,59 @@ class RecipeViewModel extends ChangeNotifier {
     _lastFetchedIngredientKey = _buildIngredientKey(resolvedQueryIngredients);
     _hasMoreRecipes = page.hasNext;
     _applyFiltersAndSort();
+  }
+
+  Future<RecipeSuggestionPage> _fetchAnyOfOptionalIngredientsPage() async {
+    final List<String> optional = _sanitizeIngredients(
+      _optionalQueryIngredients,
+    );
+    if (optional.isEmpty) {
+      return const RecipeSuggestionPage(
+        recipes: <Recipe>[],
+        queryIngredients: <String>[],
+        priorityRecipeIds: <int>[],
+        hasNext: false,
+      );
+    }
+
+    final List<Recipe> merged = <Recipe>[];
+    final Set<int> seen = <int>{};
+    final List<String> pantryContext = _referencePantryIngredients.isNotEmpty
+        ? _referencePantryIngredients
+        : _activePantryIngredients;
+
+    for (final String ingredient in optional) {
+      if (ingredient.trim().isEmpty) {
+        continue;
+      }
+
+      final RecipeSuggestionPage page = await _apiClient
+          .searchRecipesByKeywordPage(
+            keyword: ingredient,
+            pantryIngredients: pantryContext,
+            from: 0,
+            number: _pageSize,
+          );
+
+      for (final Recipe recipe in page.recipes) {
+        if (seen.add(recipe.id)) {
+          merged.add(recipe);
+          if (merged.length >= _pageSize) {
+            break;
+          }
+        }
+      }
+
+      if (merged.length >= _pageSize) {
+        break;
+      }
+    }
+
+    return RecipeSuggestionPage(
+      recipes: merged,
+      queryIngredients: optional,
+      priorityRecipeIds: const <int>[],
+      hasNext: false,
+    );
   }
 }

@@ -51,10 +51,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     if (seedIngredients.isNotEmpty) {
       _viewModel.updateReferencePantryIngredients(seedIngredients);
       _pantryIngredients = List<String>.from(seedIngredients)..sort();
-      _selectedIngredientKeys = _pantryIngredients
-          .map(_normalizeIngredient)
-          .where((String value) => value.isNotEmpty)
-          .toSet();
+      _selectedIngredientKeys = <String>{};
       _applySelectionAndFetch();
     } else {
       _syncPantryIngredientsFromBox();
@@ -72,13 +69,14 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   }
 
   void _syncPantryIngredientsFromBox({bool forceFetch = false}) {
-    final List<String> pantryNames = _pantryBox.values
-        .where((PantryItemModel item) => item.deletedAtUtcMs == null)
-        .map((PantryItemModel item) => item.name.trim())
-        .where((String name) => name.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final List<String> pantryNames =
+        _pantryBox.values
+            .where((PantryItemModel item) => item.deletedAtUtcMs == null)
+            .map((PantryItemModel item) => item.name.trim())
+            .where((String name) => name.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
     final String pantryKey = _buildIngredientKey(pantryNames);
     if (pantryKey == _lastPantryKey) {
@@ -96,21 +94,15 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     if (mounted) {
       setState(() {
         _pantryIngredients = pantryNames;
-        if (_followPantry && _selectedIngredientKeys.isEmpty) {
-          _selectedIngredientKeys = normalizedPantry;
-        } else {
-          _selectedIngredientKeys =
-              _selectedIngredientKeys.intersection(normalizedPantry);
-        }
+        _selectedIngredientKeys = _selectedIngredientKeys.intersection(
+          normalizedPantry,
+        );
       });
     } else {
       _pantryIngredients = pantryNames;
-      if (_followPantry && _selectedIngredientKeys.isEmpty) {
-        _selectedIngredientKeys = normalizedPantry;
-      } else {
-        _selectedIngredientKeys =
-            _selectedIngredientKeys.intersection(normalizedPantry);
-      }
+      _selectedIngredientKeys = _selectedIngredientKeys.intersection(
+        normalizedPantry,
+      );
     }
 
     final bool shouldFollowPantry =
@@ -131,18 +123,20 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   }
 
   void _applySelectionAndFetch({bool forceFetch = false}) {
-    final List<String> selected = _selectedIngredientKeys.isEmpty
-        ? <String>[]
-        : _pantryIngredients
-            .where(
-              (String name) =>
-                  _selectedIngredientKeys.contains(_normalizeIngredient(name)),
-            )
-            .toList();
+    final bool hasSelection = _selectedIngredientKeys.isNotEmpty;
+    final List<String> selected = _pantryIngredients
+        .where(
+          (String name) =>
+              _selectedIngredientKeys.contains(_normalizeIngredient(name)),
+        )
+        .toList();
 
-    _viewModel.updateRequiredQueryIngredients(selected);
+    _viewModel.updateRequiredQueryIngredients(hasSelection ? selected : []);
+    _viewModel.updateOptionalQueryIngredients(
+      hasSelection ? [] : _pantryIngredients,
+    );
     _viewModel.fetchRecipes(
-      pantryIngredients: selected,
+      pantryIngredients: hasSelection ? selected : _pantryIngredients,
       forceRefresh: forceFetch,
     );
   }
@@ -306,10 +300,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     _followPantry = false;
     setState(() {
       _pantryIngredients = List<String>.from(ingredients)..sort();
-      _selectedIngredientKeys = _pantryIngredients
-          .map(_normalizeIngredient)
-          .where((String value) => value.isNotEmpty)
-          .toSet();
+      _selectedIngredientKeys = <String>{};
     });
     _applySelectionAndFetch(forceFetch: true);
   }
@@ -356,14 +347,10 @@ class _PantryIngredientsBar extends StatelessWidget {
                   onPressed: () =>
                       _showEditIngredientsDialog(context, ingredients),
                   icon: Icon(
-                    ingredients.isEmpty
-                        ? Icons.add
-                        : Icons.edit,
+                    ingredients.isEmpty ? Icons.add : Icons.edit,
                     size: 16,
                   ),
-                  label: Text(
-                    ingredients.isEmpty ? 'Thêm' : 'Sửa',
-                  ),
+                  label: Text(ingredients.isEmpty ? 'Thêm' : 'Sửa'),
                 ),
             ],
           ),
@@ -670,7 +657,7 @@ class _RecipeCard extends StatelessWidget {
                     ),
             ),
             Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -704,7 +691,7 @@ class _RecipeCard extends StatelessWidget {
                           : missingIngredients.isNotEmpty
                           ? 'Gần đủ: Bạn có $used/$total nguyên liệu, chỉ cần mua thêm ${missingIngredients.take(2).join(', ')}${missingIngredients.length > 2 ? '...' : ''}.'
                           : 'Gần đủ: Bạn có $used/$total nguyên liệu, cần mua thêm $missing nguyên liệu.',
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
@@ -715,14 +702,6 @@ class _RecipeCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  if (!fullMatch && missingIngredients.isNotEmpty)
-                    Text(
-                      'Thiếu: ${missingIngredients.join(', ')}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
                   const SizedBox(height: 4),
                   LayoutBuilder(
                     builder:
