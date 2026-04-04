@@ -23,6 +23,30 @@ class PlannedRecipe {
   final String? sourceUrl;
   final List<ShoppingIngredientSnapshot> shoppingIngredients;
 
+  PlannedRecipe copyWith({
+    int? recipeId,
+    String? title,
+    String? imageUrl,
+    int? addedAtUtcMs,
+    String? summary,
+    int? readyInMinutes,
+    int? servings,
+    String? sourceUrl,
+    List<ShoppingIngredientSnapshot>? shoppingIngredients,
+  }) {
+    return PlannedRecipe(
+      recipeId: recipeId ?? this.recipeId,
+      title: title ?? this.title,
+      imageUrl: imageUrl ?? this.imageUrl,
+      addedAtUtcMs: addedAtUtcMs ?? this.addedAtUtcMs,
+      summary: summary ?? this.summary,
+      readyInMinutes: readyInMinutes ?? this.readyInMinutes,
+      servings: servings ?? this.servings,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      shoppingIngredients: shoppingIngredients ?? this.shoppingIngredients,
+    );
+  }
+
   factory PlannedRecipe.fromRecipe(
     Recipe recipe, {
     required List<ShoppingIngredientSnapshot> shoppingIngredients,

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../meal_planner/view_models/meal_planner_view_model.dart';
 import '../../meal_planner/widgets/planner_footer.dart';
+import '../models/shopping_item_model.dart';
 
 class ShoppingListScreen extends StatefulWidget {
   const ShoppingListScreen({super.key});
@@ -150,11 +151,11 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     itemBuilder: (BuildContext context, int index) {
                       final item = viewModel.selectedDayShoppingItems[index];
                       return Card(
-                        child: CheckboxListTile(
-                          value: item.checked,
-                          onChanged: (_) => viewModel.toggleShoppingItemChecked(
-                            viewModel.selectedDate,
-                            item.itemId,
+                        child: ListTile(
+                          onTap: () => _showItemActions(
+                            context,
+                            viewModel,
+                            item,
                           ),
                           title: Text(item.name),
                           subtitle: Text(
@@ -162,12 +163,14 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                 ? 'Tự động thêm từ công thức'
                                 : item.displayQuantity,
                           ),
-                          secondary: IconButton(
-                            onPressed: () => viewModel.removeShoppingItem(
-                              viewModel.selectedDate,
-                              item.itemId,
+                          trailing: IconButton(
+                            onPressed: () => _showItemActions(
+                              context,
+                              viewModel,
+                              item,
                             ),
-                            icon: const Icon(Icons.delete_outline),
+                            icon: const Icon(Icons.more_vert),
+                            tooltip: 'Tùy chọn',
                           ),
                         ),
                       );
@@ -185,7 +188,78 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       ),
     );
   }
+
+  Future<void> _showItemActions(
+    BuildContext context,
+    MealPlannerViewModel viewModel,
+    ShoppingItemModel item,
+  ) async {
+    final _ShoppingItemAction? action = await showModalBottomSheet<
+      _ShoppingItemAction
+    >(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.kitchen_outlined),
+                title: const Text('Thêm vào tủ bếp'),
+                onTap: () => Navigator.of(context).pop(
+                  _ShoppingItemAction.addToPantry,
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Xóa khỏi danh sách'),
+                onTap: () => Navigator.of(context).pop(
+                  _ShoppingItemAction.delete,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (action == null || !context.mounted) {
+      return;
+    }
+
+    if (action == _ShoppingItemAction.addToPantry) {
+      final bool added = await viewModel.addShoppingItemToPantry(
+        viewModel.selectedDate,
+        item.itemId,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            added
+                ? 'Đã thêm "${item.name}" vào tủ bếp.'
+                : 'Không thể thêm vào tủ bếp.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await viewModel.removeShoppingItem(
+      viewModel.selectedDate,
+      item.itemId,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã xóa "${item.name}" khỏi danh sách.')),
+      );
+    }
+  }
 }
+
+enum _ShoppingItemAction { addToPantry, delete }
 
 class _EmptyShoppingState extends StatelessWidget {
   const _EmptyShoppingState();

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
 import 'package:fridge_to_fork_assistant/features/meal_planner/view_models/meal_planner_view_model.dart';
@@ -8,6 +9,7 @@ import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.da
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/view_models/recipe_view_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/views/recipe_detail_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
 class RecipeListScreen extends StatefulWidget {
@@ -26,6 +28,10 @@ class RecipeListScreen extends StatefulWidget {
 
 class _RecipeListScreenState extends State<RecipeListScreen> {
   late final RecipeViewModel _viewModel;
+  late final Box<PantryItemModel> _pantryBox;
+  late final ValueListenable<Box<PantryItemModel>> _pantryListenable;
+  bool _followPantry = true;
+  String _lastPantryKey = '';
 
   @override
   void initState() {
@@ -36,6 +42,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
         appKey: ApiConfig.edamamAppKey,
       ),
     );
+    _attachPantryListener();
 
     final List<String> seedIngredients =
         widget.pantryIngredients ?? const <String>[];
@@ -44,29 +51,60 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
       _viewModel.updateReferencePantryIngredients(seedIngredients);
       _viewModel.fetchRecipes(pantryIngredients: seedIngredients);
     } else {
-      _loadPantryIngredientsForMatching();
-      _viewModel.loadInitialSuggestions();
+      _syncPantryIngredientsFromBox();
     }
   }
 
-  Future<void> _loadPantryIngredientsForMatching() async {
-    final PantryRepository pantryRepository = PantryRepository();
-    final List<PantryItemModel> items = await pantryRepository.getAllItems();
-    final List<String> pantryNames = items
+  void _attachPantryListener() {
+    _pantryBox = Hive.box<PantryItemModel>(PantryRepository.boxName);
+    _pantryListenable = _pantryBox.listenable();
+    _pantryListenable.addListener(_handlePantryBoxChanged);
+  }
+
+  void _handlePantryBoxChanged() {
+    _syncPantryIngredientsFromBox();
+  }
+
+  void _syncPantryIngredientsFromBox({bool forceFetch = false}) {
+    final List<String> pantryNames = _pantryBox.values
+        .where((PantryItemModel item) => item.deletedAtUtcMs == null)
         .map((PantryItemModel item) => item.name.trim())
         .where((String name) => name.isNotEmpty)
         .toSet()
         .toList();
 
-    if (!mounted) {
+    final String pantryKey = _buildIngredientKey(pantryNames);
+    if (pantryKey == _lastPantryKey) {
       return;
     }
+    _lastPantryKey = pantryKey;
 
     _viewModel.updateReferencePantryIngredients(pantryNames);
+
+    final bool shouldFollowPantry =
+        widget.isPantrySuggestionWindow || _followPantry;
+    if (shouldFollowPantry) {
+      _viewModel.updateMockPantryIngredients(pantryNames);
+      _viewModel.fetchRecipes(
+        pantryIngredients: pantryNames,
+        forceRefresh: forceFetch,
+      );
+    }
+  }
+
+  String _buildIngredientKey(List<String> ingredients) {
+    final List<String> normalized =
+        ingredients
+            .map((String value) => value.toLowerCase().trim())
+            .where((String value) => value.isNotEmpty)
+            .toList()
+          ..sort();
+    return normalized.join('|');
   }
 
   @override
   void dispose() {
+    _pantryListenable.removeListener(_handlePantryBoxChanged);
     _viewModel.dispose();
     super.dispose();
   }
@@ -88,6 +126,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
                 viewModel: _viewModel,
                 allowManualEdit: !widget.isPantrySuggestionWindow,
                 isPantrySuggestionWindow: widget.isPantrySuggestionWindow,
+                onManualUpdate: _handleManualIngredientsUpdate,
               ),
               _FiltersBar(viewModel: _viewModel),
               if (_viewModel.isLoading)
@@ -182,6 +221,18 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
       ),
     );
   }
+
+  void _handleManualIngredientsUpdate(List<String> ingredients) {
+    if (ingredients.isEmpty) {
+      _followPantry = true;
+      _syncPantryIngredientsFromBox(forceFetch: true);
+      return;
+    }
+
+    _followPantry = false;
+    _viewModel.updateMockPantryIngredients(ingredients);
+    _viewModel.fetchRecipes(pantryIngredients: ingredients);
+  }
 }
 
 class _PantryIngredientsBar extends StatelessWidget {
@@ -189,11 +240,13 @@ class _PantryIngredientsBar extends StatelessWidget {
     required this.viewModel,
     required this.allowManualEdit,
     required this.isPantrySuggestionWindow,
+    required this.onManualUpdate,
   });
 
   final RecipeViewModel viewModel;
   final bool allowManualEdit;
   final bool isPantrySuggestionWindow;
+  final ValueChanged<List<String>> onManualUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -277,8 +330,7 @@ class _PantryIngredientsBar extends StatelessWidget {
                     .map((String value) => value.trim())
                     .where((String value) => value.isNotEmpty)
                     .toList();
-                vm.updateMockPantryIngredients(ingredients);
-                vm.fetchRecipes(pantryIngredients: ingredients);
+                onManualUpdate(ingredients);
                 Navigator.of(context).pop();
               },
               child: const Text('Lưu'),

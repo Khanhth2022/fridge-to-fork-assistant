@@ -1,19 +1,27 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../recipes/models/recipe_model.dart';
 import '../../shopping_list/models/shopping_item_model.dart';
+import '../../pantry/models/pantry_item_model.dart';
+import '../../pantry/pantry_repository.dart';
 import '../models/meal_plan_model.dart';
 import '../repositories/meal_planner_repository.dart';
 
 class MealPlannerViewModel extends ChangeNotifier {
   MealPlannerViewModel({MealPlannerRepository? repository})
     : _repository = repository ?? MealPlannerRepository() {
+    _attachPantryListener();
     unawaited(_loadInitialData());
   }
 
   final MealPlannerRepository _repository;
+  final PantryRepository _pantryRepository = PantryRepository();
+  late final Box<PantryItemModel> _pantryBox;
+  late final ValueListenable<Box<PantryItemModel>> _pantryListenable;
+  String _lastPantryKey = '';
 
   DateTime _visibleWeekStart = _normalizeDate(DateTime.now());
   DateTime _selectedDate = _normalizeDate(DateTime.now());
@@ -50,8 +58,15 @@ class MealPlannerViewModel extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     await _reloadVisibleWeek();
+    await refreshMissingIngredientsFromPantry();
     _isLoading = false;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _pantryListenable.removeListener(_handlePantryBoxChanged);
+    super.dispose();
   }
 
   Future<void> refresh() async {
@@ -269,6 +284,139 @@ class MealPlannerViewModel extends ChangeNotifier {
     _shoppingItemsByDate[_dateKey(normalizedDate)] = items;
     await _repository.saveShoppingItems(normalizedDate, items);
     notifyListeners();
+  }
+
+  Future<bool> addShoppingItemToPantry(DateTime date, String itemId) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
+      _shoppingForDate(normalizedDate),
+    );
+    final int index = items.indexWhere(
+      (ShoppingItemModel item) => item.itemId == itemId,
+    );
+    if (index == -1) {
+      return false;
+    }
+
+    final ShoppingItemModel shoppingItem = items[index];
+    final String name = shoppingItem.name.trim();
+    if (name.isEmpty) {
+      await removeShoppingItem(normalizedDate, itemId);
+      return false;
+    }
+
+    final double quantity = shoppingItem.quantity > 0
+        ? shoppingItem.quantity
+        : 1;
+    final String unit = shoppingItem.unit.trim();
+    final DateTime now = DateTime.now();
+    final DateTime purchaseDate = DateTime(now.year, now.month, now.day);
+    final DateTime expiryDate = purchaseDate.add(const Duration(days: 7));
+
+    final List<PantryItemModel> pantryItems =
+        await _pantryRepository.getAllItems();
+    final String normalizedName = _normalizeText(name);
+    final String normalizedUnit = _normalizeText(unit);
+    final int existingIndex = pantryItems.indexWhere(
+      (PantryItemModel item) =>
+          _normalizeText(item.name) == normalizedName &&
+          _normalizeText(item.unit) == normalizedUnit,
+    );
+
+    if (existingIndex != -1) {
+      final PantryItemModel existing = pantryItems[existingIndex];
+      await _pantryRepository.updateItem(
+        existing.itemId,
+        existing.copyWith(quantity: existing.quantity + quantity),
+      );
+    } else {
+      await _pantryRepository.addItem(
+        PantryItemModel(
+          name: name,
+          quantity: quantity,
+          unit: unit,
+          purchaseDate: purchaseDate,
+          expiryDate: expiryDate,
+        ),
+      );
+    }
+
+    await removeShoppingItem(normalizedDate, itemId);
+    await refreshMissingIngredientsFromPantry();
+    return true;
+  }
+
+  void _attachPantryListener() {
+    _pantryBox = Hive.box<PantryItemModel>(PantryRepository.boxName);
+    _pantryListenable = _pantryBox.listenable();
+    _pantryListenable.addListener(_handlePantryBoxChanged);
+  }
+
+  void _handlePantryBoxChanged() {
+    unawaited(refreshMissingIngredientsFromPantry());
+  }
+
+  Future<void> refreshMissingIngredientsFromPantry() async {
+    if (_plannedRecipesByDate.isEmpty) {
+      return;
+    }
+
+    final List<String> pantryNames = _pantryBox.values
+        .where((PantryItemModel item) => item.deletedAtUtcMs == null)
+        .map((PantryItemModel item) => item.name)
+        .where((String name) => name.trim().isNotEmpty)
+        .toSet()
+        .toList();
+
+    final String pantryKey = _buildPantryKey(pantryNames);
+    if (pantryKey == _lastPantryKey) {
+      return;
+    }
+    _lastPantryKey = pantryKey;
+
+    final Set<String> pantryIndex = pantryNames
+        .map(_normalizeText)
+        .where((String value) => value.isNotEmpty)
+        .toSet();
+
+    bool anyChanged = false;
+    for (final DateTime date in visibleWeekDates) {
+      final String key = _dateKey(date);
+      final List<PlannedRecipe> recipes = List<PlannedRecipe>.from(
+        _plannedRecipesByDate[key] ?? <PlannedRecipe>[],
+      );
+      bool dateChanged = false;
+
+      for (int i = 0; i < recipes.length; i++) {
+        final PlannedRecipe recipe = recipes[i];
+        if (recipe.shoppingIngredients.isEmpty) {
+          continue;
+        }
+
+        final List<ShoppingIngredientSnapshot> remaining = recipe
+            .shoppingIngredients
+            .where(
+              (ShoppingIngredientSnapshot item) =>
+                  !_isIngredientInPantry(item.name, pantryIndex),
+            )
+            .toList();
+
+        if (remaining.length != recipe.shoppingIngredients.length) {
+          recipes[i] = recipe.copyWith(shoppingIngredients: remaining);
+          dateChanged = true;
+        }
+      }
+
+      if (dateChanged) {
+        _plannedRecipesByDate[key] = recipes;
+        await _repository.savePlannedRecipes(date, recipes);
+        anyChanged = true;
+      }
+    }
+
+    if (anyChanged) {
+      notifyListeners();
+    }
   }
 
   Future<bool> addCustomShoppingItem(
@@ -506,6 +654,30 @@ class MealPlannerViewModel extends ChangeNotifier {
 
   static String _shoppingKey(String name, String unit) {
     return '${_normalizeText(name)}|${_normalizeText(unit)}';
+  }
+
+  static String _buildPantryKey(List<String> ingredients) {
+    final List<String> normalized =
+        ingredients
+            .map(_normalizeText)
+            .where((String value) => value.isNotEmpty)
+            .toList()
+          ..sort();
+    return normalized.join('|');
+  }
+
+  static bool _isIngredientInPantry(
+    String ingredient,
+    Set<String> pantryIndex,
+  ) {
+    final String normalizedIngredient = _normalizeText(ingredient);
+    for (final String pantryItem in pantryIndex) {
+      if (normalizedIngredient.contains(pantryItem) ||
+          pantryItem.contains(normalizedIngredient)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static String _normalizeText(String value) {
