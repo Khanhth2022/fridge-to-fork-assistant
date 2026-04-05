@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/widgets/top_right_notification.dart';
 import '../models/pantry_item_model.dart';
 
 class AddItemBottomSheet extends StatefulWidget {
@@ -368,12 +369,9 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                       if (!context.mounted) {
                         return;
                       }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Không thể thêm nguyên liệu. Vui lòng thử lại.',
-                          ),
-                        ),
+                      showTopRightNotification(
+                        context,
+                        'Không thể thêm nguyên liệu. Vui lòng thử lại.',
                       );
                     }
                   }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/widgets/top_right_notification.dart';
 import '../../../core/services/scanner/scanner_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/custom_button.dart';
@@ -280,12 +281,9 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Đã đẩy ${ingredients.length} nguyên liệu sang module kho.',
-        ),
-      ),
+    showTopRightNotification(
+      context,
+      'Đã đẩy ${ingredients.length} nguyên liệu sang module kho.',
     );
   }
 }

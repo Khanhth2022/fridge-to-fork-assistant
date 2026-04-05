@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/widgets/top_right_notification.dart';
 import '../view_models/auth_view_model.dart';
 import '../../../core/services/sync/sync_service.dart';
 import '../../pantry/view_models/pantry_view_model.dart';
@@ -68,15 +69,11 @@ class _LoginScreenState extends State<LoginScreen> {
       await action();
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(successMessage)));
+        showTopRightNotification(context, successMessage);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        showTopRightNotification(context, e.toString());
       }
     } finally {
       if (isDialogOpen && mounted) {
@@ -126,9 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        showTopRightNotification(context, e.toString());
       }
     }
   }

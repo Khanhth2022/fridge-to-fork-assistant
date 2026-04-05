@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/widgets/top_right_notification.dart';
 import '../../recipes/models/recipe_model.dart';
 import '../view_models/meal_planner_view_model.dart';
 import '../../../core/widgets/bottom_nav_bar.dart';
@@ -30,7 +31,7 @@ class PlannerFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget calendarBar = showCalendar
-        ? const _WeeklyScheduleBar()
+        ? const WeeklyScheduleBar()
         : const SizedBox.shrink();
 
     if (!showCalendar && !showBottomNav) {
@@ -54,8 +55,8 @@ class PlannerFooter extends StatelessWidget {
   }
 }
 
-class _WeeklyScheduleBar extends StatelessWidget {
-  const _WeeklyScheduleBar();
+class WeeklyScheduleBar extends StatelessWidget {
+  const WeeklyScheduleBar({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -151,14 +152,11 @@ class _WeekDayTile extends StatelessWidget {
           return;
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              added
-                  ? 'Đã thêm món ăn ${details.data.recipe.title} vào ngày ${_formatFullDate(date)} thành công'
-                  : 'Món ăn này đã có trong ngày ${_formatFullDate(date)}.',
-            ),
-          ),
+        showTopRightNotification(
+          context,
+          added
+              ? 'Đã thêm món ăn ${details.data.recipe.title} vào ngày ${_formatFullDate(date)} thành công'
+              : 'Món ăn này đã có trong ngày ${_formatFullDate(date)}.',
         );
       },
       builder:

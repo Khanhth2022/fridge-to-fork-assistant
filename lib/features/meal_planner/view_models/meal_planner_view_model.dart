@@ -591,6 +591,74 @@ class MealPlannerViewModel extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> updateShoppingItem(
+    DateTime date,
+    String itemId, {
+    required String name,
+    required double quantity,
+    String unit = '',
+  }) async {
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<ShoppingItemModel> items = List<ShoppingItemModel>.from(
+      _shoppingForDate(normalizedDate),
+    );
+
+    final int index = items.indexWhere(
+      (ShoppingItemModel item) => item.itemId == itemId,
+    );
+    if (index == -1) {
+      return false;
+    }
+
+    final String cleanedName = name.trim();
+    final String cleanedUnit = unit.trim();
+    if (cleanedName.isEmpty || quantity <= 0) {
+      return false;
+    }
+
+    final ShoppingItemModel current = items[index];
+    final String nextKey = _shoppingKey(cleanedName, cleanedUnit);
+    final ShoppingItemModel updated = current.copyWith(
+      itemId: nextKey,
+      name: cleanedName,
+      quantity: quantity,
+      unit: cleanedUnit,
+    );
+
+    final int duplicateIndex = items.indexWhere(
+      (ShoppingItemModel item) =>
+          item.itemId != current.itemId && item.normalizedKey == nextKey,
+    );
+
+    if (duplicateIndex != -1) {
+      final ShoppingItemModel duplicate = items[duplicateIndex];
+      final Map<String, double> mergedSources = Map<String, double>.from(
+        duplicate.sourceQuantities,
+      );
+      updated.sourceQuantities.forEach((String key, double value) {
+        mergedSources.update(
+          key,
+          (double existing) => existing + value,
+          ifAbsent: () => value,
+        );
+      });
+
+      items[duplicateIndex] = duplicate.copyWith(
+        quantity: duplicate.quantity + updated.quantity,
+        checked: duplicate.checked || updated.checked,
+        sourceQuantities: mergedSources,
+      );
+      items.removeAt(index);
+    } else {
+      items[index] = updated;
+    }
+
+    _shoppingItemsByDate[_dateKey(normalizedDate)] = items;
+    await _repository.saveShoppingItems(normalizedDate, items);
+    notifyListeners();
+    return true;
+  }
+
   List<PlannedRecipe> _recipesForDate(DateTime date) {
     return _plannedRecipesByDate[_dateKey(date)] ?? <PlannedRecipe>[];
   }

@@ -7,6 +7,7 @@ import '../view_models/meal_planner_view_model.dart';
 import '../../pantry/models/pantry_item_model.dart';
 import '../../pantry/pantry_repository.dart';
 import '../widgets/planner_footer.dart';
+import '../../../core/widgets/top_right_notification.dart';
 
 class MealPlannerScreen extends StatelessWidget {
   const MealPlannerScreen({super.key});
@@ -64,6 +65,7 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: <Widget>[
+                const WeeklyScheduleBar(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                   child: Row(
@@ -75,14 +77,6 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
                         ),
                       ),
                     ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: _CustomRecipeForm(
-                    recipeNameController: _recipeNameController,
-                    ingredientsController: _ingredientsController,
-                    onSubmit: () => _submitCustomRecipe(context, viewModel),
                   ),
                 ),
                 Expanded(
@@ -130,8 +124,78 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
                 ),
               ],
             ),
-      bottomNavigationBar: const PlannerFooter(currentIndex: 1),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddCustomRecipeDialog(context, viewModel),
+        icon: const Icon(Icons.add),
+        label: const Text('Thêm món'),
+      ),
+      bottomNavigationBar: const PlannerFooter(
+        currentIndex: 1,
+        showCalendar: false,
+      ),
     );
+  }
+
+  Future<void> _showAddCustomRecipeDialog(
+    BuildContext context,
+    MealPlannerViewModel viewModel,
+  ) async {
+    _recipeNameController.clear();
+    _ingredientsController.clear();
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Thêm món ăn thủ công'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TextField(
+                  controller: _recipeNameController,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên món ăn',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _ingredientsController,
+                  minLines: 1,
+                  maxLines: 3,
+                  textInputAction: TextInputAction.newline,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên nguyên liệu',
+                    hintText: 'Ngăn cách bằng dấu phẩy hoặc xuống dòng',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Thêm'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    await _submitCustomRecipe(context, viewModel);
   }
 
   Future<void> _submitCustomRecipe(
@@ -144,9 +208,7 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
     );
 
     if (recipeName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập tên món ăn.')),
-      );
+      showTopRightNotification(context, 'Vui lòng nhập tên món ăn.');
       return;
     }
 
@@ -168,14 +230,11 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          added
-              ? 'Đã thêm món ăn $recipeName vào ngày ${viewModel.selectedDayLabel} thành công'
-              : 'Không thể thêm món ăn này vào ngày ${viewModel.selectedDayLabel}.',
-        ),
-      ),
+    showTopRightNotification(
+      context,
+      added
+          ? 'Đã thêm món ăn $recipeName vào ngày ${viewModel.selectedDayLabel} thành công'
+          : 'Không thể thêm món ăn này vào ngày ${viewModel.selectedDayLabel}.',
     );
 
     if (added) {
@@ -242,9 +301,7 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
       if (action == _MealCompletionAction.delete) {
         await viewModel.removeRecipeFromSelectedDate(recipe.recipeId);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đã xóa món khỏi lịch.')),
-          );
+          showTopRightNotification(context, 'Đã xóa món khỏi lịch.');
         }
         return;
       }
@@ -257,14 +314,11 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            completed
-                ? 'Đã hoàn thành món và trừ nguyên liệu trong kho.'
-                : 'Đã hoàn thành món, nhưng chưa trừ được nguyên liệu.',
-          ),
-        ),
+      showTopRightNotification(
+        context,
+        completed
+            ? 'Đã hoàn thành món và trừ nguyên liệu trong kho.'
+            : 'Đã hoàn thành món, nhưng chưa trừ được nguyên liệu.',
       );
       return;
     }
@@ -307,14 +361,11 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          added
-              ? 'Đã thêm nguyên liệu thiếu vào danh sách mua sắm.'
-              : 'Không thể thêm nguyên liệu vào danh sách.',
-        ),
-      ),
+    showTopRightNotification(
+      context,
+      added
+          ? 'Đã thêm nguyên liệu thiếu vào danh sách mua sắm.'
+          : 'Không thể thêm nguyên liệu vào danh sách.',
     );
   }
 
@@ -351,77 +402,6 @@ class _MealPlannerViewState extends State<_MealPlannerView> {
 }
 
 enum _MealCompletionAction { delete, complete }
-
-class _CustomRecipeForm extends StatelessWidget {
-  const _CustomRecipeForm({
-    required this.recipeNameController,
-    required this.ingredientsController,
-    required this.onSubmit,
-  });
-
-  final TextEditingController recipeNameController;
-  final TextEditingController ingredientsController;
-  final VoidCallback onSubmit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'Thêm món ăn thủ công',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: recipeNameController,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Tên món ăn',
-                border: OutlineInputBorder(),
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: ingredientsController,
-              minLines: 1,
-              maxLines: 2,
-              textInputAction: TextInputAction.newline,
-              decoration: const InputDecoration(
-                labelText: 'Tên nguyên liệu',
-                hintText: 'Ngăn cách bằng dấu phẩy hoặc xuống dòng',
-                border: OutlineInputBorder(),
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: onSubmit,
-                child: const Text('Thêm'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _PlannedRecipeTile extends StatelessWidget {
   const _PlannedRecipeTile({

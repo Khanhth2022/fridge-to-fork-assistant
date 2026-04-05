@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
+import 'package:fridge_to_fork_assistant/core/widgets/top_right_notification.dart';
 import 'package:fridge_to_fork_assistant/features/meal_planner/view_models/meal_planner_view_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/models/recipe_model.dart';
 import 'package:fridge_to_fork_assistant/features/recipes/repositories/recipe_api_client.dart';
@@ -362,14 +363,11 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          addedCount == 0
-              ? 'Các nguyên liệu thiếu đã có trong danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.'
-              : 'Đã thêm $addedCount nguyên liệu thiếu vào danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.',
-        ),
-      ),
+    showTopRightNotification(
+      context,
+      addedCount == 0
+          ? 'Các nguyên liệu thiếu đã có trong danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.'
+          : 'Đã thêm $addedCount nguyên liệu thiếu vào danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.',
     );
   }
 
@@ -507,11 +505,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     final Uri uri = Uri.parse(url);
     final bool opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
     if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Không mở được liên kết nguồn công thức.'),
-        ),
-      );
+      showTopRightNotification(context, 'Không mở được liên kết nguồn công thức.');
     }
   }
 

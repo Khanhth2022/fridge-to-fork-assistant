@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fridge_to_fork_assistant/core/config/api_config.dart';
+import 'package:fridge_to_fork_assistant/core/widgets/top_right_notification.dart';
 import 'package:fridge_to_fork_assistant/features/meal_planner/view_models/meal_planner_view_model.dart';
 import 'package:fridge_to_fork_assistant/features/meal_planner/widgets/planner_footer.dart';
 import 'package:fridge_to_fork_assistant/features/pantry/models/pantry_item_model.dart';
@@ -305,14 +306,11 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
                 addMissingToShopping: addMissingToShopping,
               );
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      added
-                          ? 'Đã thêm món ăn ${recipe.title} vào ngày ${plannerViewModel.selectedDayLabel} thành công'
-                          : 'Món ăn này đã có trong ngày ${plannerViewModel.selectedDayLabel}.',
-                    ),
-                  ),
+                showTopRightNotification(
+                  context,
+                  added
+                      ? 'Đã thêm món ăn ${recipe.title} vào ngày ${plannerViewModel.selectedDayLabel} thành công'
+                      : 'Món ăn này đã có trong ngày ${plannerViewModel.selectedDayLabel}.',
                 );
               }
             },
@@ -583,10 +581,6 @@ class _RecipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool fullMatch = pantryMatch.isFullMatch;
-    final int total = pantryMatch.totalIngredientCount;
-    final int used = pantryMatch.availableIngredientCount;
-    final int missing = pantryMatch.missingIngredientCount;
     final List<String> missingIngredients = pantryMatch.missingIngredients;
 
     return LongPressDraggable<RecipeDragPayload>(
@@ -598,46 +592,20 @@ class _RecipeCard extends StatelessWidget {
         color: Colors.transparent,
         child: SizedBox(
           width: 320,
-          child: _buildRecipeCardBody(
-            context,
-            fullMatch,
-            total,
-            used,
-            missing,
-            missingIngredients,
-          ),
+          child: _buildRecipeCardBody(context),
         ),
       ),
       childWhenDragging: Opacity(
         opacity: 0.45,
-        child: _buildRecipeCardBody(
-          context,
-          fullMatch,
-          total,
-          used,
-          missing,
-          missingIngredients,
-        ),
+        child: _buildRecipeCardBody(context),
       ),
-      child: _buildRecipeCardBody(
-        context,
-        fullMatch,
-        total,
-        used,
-        missing,
-        missingIngredients,
-      ),
+      child: _buildRecipeCardBody(context),
     );
   }
 
-  Widget _buildRecipeCardBody(
-    BuildContext context,
-    bool fullMatch,
-    int total,
-    int used,
-    int missing,
-    List<String> missingIngredients,
-  ) {
+  Widget _buildRecipeCardBody(BuildContext context) {
+    final String summaryText = _summaryForCard();
+
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -694,109 +662,85 @@ class _RecipeCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: <Widget>[
-                  Text(
-                    recipe.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: fullMatch
-                          ? Colors.green.shade50
-                          : Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: fullMatch
-                            ? Colors.green.shade300
-                            : Colors.orange.shade300,
-                      ),
-                    ),
-                    child: Text(
-                      fullMatch
-                          ? 'Đủ nguyên liệu: Bạn có $used/$total nguyên liệu cho món này.'
-                          : missingIngredients.isNotEmpty
-                          ? 'Gần đủ: Bạn có $used/$total nguyên liệu, chỉ cần mua thêm ${missingIngredients.take(2).join(', ')}${missingIngredients.length > 2 ? '...' : ''}.'
-                          : 'Gần đủ: Bạn có $used/$total nguyên liệu, cần mua thêm $missing nguyên liệu.',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: fullMatch
-                            ? Colors.green.shade800
-                            : Colors.orange.shade900,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final Widget metaChips = Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            children: <Widget>[
-                              if (recipe.readyInMinutes != null &&
-                                  recipe.readyInMinutes! > 0)
-                                _MetaChip(
-                                  icon: Icons.schedule,
-                                  text: '${recipe.readyInMinutes} phút',
-                                ),
-                              if (recipe.servings != null)
-                                _MetaChip(
-                                  icon: Icons.people,
-                                  text: '${recipe.servings} khẩu phần',
-                                ),
-                            ],
-                          );
-
-                          final Widget quickAddButton = FilledButton.tonalIcon(
-                            onPressed: onQuickAdd,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Thêm'),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              minimumSize: const Size(60, 32),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          recipe.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
                             ),
-                          );
-
-                          final bool compactLayout = constraints.maxWidth < 220;
-                          if (compactLayout) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                metaChips,
-                                const SizedBox(height: 6),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: quickAddButton,
-                                ),
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            children: <Widget>[
-                              Expanded(child: metaChips),
-                              const SizedBox(width: 8),
-                              quickAddButton,
-                            ],
-                          );
-                        },
+                          ),
+                          child: Text(
+                            summaryText,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: <Widget>[
+                            if (recipe.readyInMinutes != null &&
+                                recipe.readyInMinutes! > 0)
+                              _MetaChip(
+                                icon: Icons.schedule,
+                                text: '${recipe.readyInMinutes} phút',
+                              ),
+                            if (recipe.servings != null)
+                              _MetaChip(
+                                icon: Icons.people,
+                                text: '${recipe.servings} khẩu phần',
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: FilledButton.tonalIcon(
+                      onPressed: onQuickAdd,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Thêm'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(60, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -805,6 +749,19 @@ class _RecipeCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _summaryForCard() {
+    final String summary = (recipe.summary ?? '').trim();
+    if (summary.isEmpty) {
+      return 'Chưa có tóm tắt món ăn.';
+    }
+    return summary
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 }
 

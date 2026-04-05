@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/top_right_notification.dart';
 import '../models/pantry_item_model.dart';
 
 class ScannedItemsReviewSheet extends StatefulWidget {
@@ -261,9 +262,7 @@ class _ScannedItemsReviewSheetState extends State<ScannedItemsReviewSheet> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showTopRightNotification(context, message);
   }
 
   String _formatDate(DateTime date) {

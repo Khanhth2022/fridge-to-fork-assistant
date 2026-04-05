@@ -7,6 +7,7 @@ import 'scanned_items_review_sheet.dart';
 import '../../../core/widgets/bottom_nav_bar.dart';
 import '../../../core/services/scanner/scanner_service.dart';
 import '../../../core/services/sync/sync_service.dart';
+import '../../../core/widgets/top_right_notification.dart';
 import 'receipt_scanner_screen.dart';
 import '../../../features/auth/view_models/auth_view_model.dart';
 import '../../../features/auth/views/login_screen.dart';
@@ -144,9 +145,7 @@ class PantryScreen extends StatelessWidget {
       await action();
 
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(successMessage)));
+        showTopRightNotification(context, successMessage);
       }
     } catch (e) {
       if (context.mounted) {
@@ -154,9 +153,7 @@ class PantryScreen extends StatelessWidget {
         if (message.toLowerCase().contains('not authenticated')) {
           message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
         }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        showTopRightNotification(context, message);
       }
     } finally {
       if (isDialogOpen && context.mounted) {
@@ -218,9 +215,7 @@ class PantryScreen extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không có nguyên liệu hợp lệ từ ảnh.')),
-      );
+      showTopRightNotification(context, 'Không có nguyên liệu hợp lệ từ ảnh.');
       return;
     }
 
@@ -258,9 +253,7 @@ class PantryScreen extends StatelessWidget {
     final String message = duplicateCount > 0
         ? 'Đã thêm $addedCount nguyên liệu, bỏ qua $duplicateCount mục trùng tên.'
         : 'Đã thêm $addedCount nguyên liệu vào kho.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showTopRightNotification(context, message);
   }
 
   Future<void> _showAddOptions(
@@ -389,9 +382,7 @@ class PantryScreen extends StatelessWidget {
     final double? amount = double.tryParse(amountController.text.trim());
     if (amount == null || amount <= 0) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Số lượng sử dụng không hợp lệ.')),
-        );
+        showTopRightNotification(context, 'Số lượng sử dụng không hợp lệ.');
       }
       return;
     }
@@ -407,10 +398,9 @@ class PantryScreen extends StatelessWidget {
     }
 
     if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Không thể trừ số lượng. Vui lòng kiểm tra lại.'),
-        ),
+      showTopRightNotification(
+        context,
+        'Không thể trừ số lượng. Vui lòng kiểm tra lại.',
       );
     }
   }
@@ -548,17 +538,14 @@ class PantryScreen extends StatelessWidget {
               } else if (value == 'logout') {
                 await authViewModel.logout();
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('Đã đăng xuất')));
+                  showTopRightNotification(context, 'Đã đăng xuất');
                 }
               } else if (value == 'backup') {
                 if (!authViewModel.isLoggedIn) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Vui lòng đăng nhập để sao lưu dữ liệu'),
-                      ),
+                    showTopRightNotification(
+                      context,
+                      'Vui lòng đăng nhập để sao lưu dữ liệu',
                     );
                   }
                   return;
@@ -577,12 +564,9 @@ class PantryScreen extends StatelessWidget {
               } else if (value == 'restore') {
                 if (!authViewModel.isLoggedIn) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Vui lòng đăng nhập để khôi phục dữ liệu',
-                        ),
-                      ),
+                    showTopRightNotification(
+                      context,
+                      'Vui lòng đăng nhập để khôi phục dữ liệu',
                     );
                   }
                   return;
@@ -603,11 +587,7 @@ class PantryScreen extends StatelessWidget {
 
                   if (resolution == null) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Đã hủy khôi phục dữ liệu'),
-                        ),
-                      );
+                      showTopRightNotification(context, 'Đã hủy khôi phục dữ liệu');
                     }
                     return;
                   }
