@@ -95,7 +95,8 @@ class _ScannedItemsReviewSheetState extends State<ScannedItemsReviewSheet> {
                     )
                   : ListView.separated(
                       itemCount: _drafts.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         return _buildDraftCard(_drafts[index]);
                       },

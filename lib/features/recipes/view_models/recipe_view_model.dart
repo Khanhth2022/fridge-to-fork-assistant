@@ -146,7 +146,6 @@ class RecipeViewModel extends ChangeNotifier {
     'sandwiches',
   ];
 
-  static const int _nearEnoughThreshold = 2;
   static const int _pageSize = 12;
 
   bool _isLoadingMore = false;
@@ -463,10 +462,6 @@ class RecipeViewModel extends ChangeNotifier {
           normalizedValue.contains(normalizedSelected) ||
           normalizedSelected.contains(normalizedValue);
     });
-  }
-
-  bool _isCookableOrNearEnough(Recipe recipe) {
-    return recipe.totalIngredientCount > 0;
   }
 
   int _sortByPantryUsefulness(Recipe a, Recipe b) {

@@ -465,53 +465,6 @@ class _IngredientRow extends StatelessWidget {
   }
 }
 
-class _InstructionsSteps extends StatelessWidget {
-  const _InstructionsSteps({required this.instructions, this.sourceUrl});
-
-  final String instructions;
-  final String? sourceUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<String> steps = instructions
-        .split(RegExp(r'\.|\n'))
-        .map((String line) => line.trim())
-        .where((String line) => line.length > 8)
-        .toList();
-
-    if (steps.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Text(
-            'Edamam khong cung cap chi tiet tung buoc cho cong thuc web. Vui long xem huong dan day du tai Nguon cong thuc ben duoi.',
-          ),
-          if (sourceUrl != null && sourceUrl!.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
-            SelectableText(sourceUrl!),
-          ],
-        ],
-      );
-    }
-
-    return Column(
-      children: List<Widget>.generate(steps.length, (int index) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              CircleAvatar(radius: 12, child: Text('${index + 1}')),
-              const SizedBox(width: 8),
-              Expanded(child: Text(steps[index])),
-            ],
-          ),
-        );
-      }),
-    );
-  }
-}
-
 class _InfoSection extends StatelessWidget {
   const _InfoSection({required this.title, required this.child});
 

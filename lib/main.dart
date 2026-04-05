@@ -28,7 +28,7 @@ void main() async {
   await NotificationService().initialize();
 
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-    await BackgroundWorker.initialize(debugMode: false);
+    await BackgroundWorker.initialize();
     await BackgroundWorker.scheduleCheckExpiredItems();
     await BackgroundWorker.schedulePantrySyncTask();
   }

@@ -34,6 +34,31 @@ class ScannerService {
     );
   }
 
+  Future<ScannerResult?> scanReceiptFromGallery() async {
+    final XFile? photo = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+
+    if (photo == null) {
+      return null;
+    }
+
+    final InputImage inputImage = InputImage.fromFilePath(photo.path);
+    final RecognizedText recognizedText = await _extractText(inputImage);
+    final List<String> barcodes = await _extractBarcodes(inputImage);
+    final List<String> ingredients = _extractIngredientCandidates(
+      recognizedText.text,
+    );
+
+    return ScannerResult(
+      imagePath: photo.path,
+      recognizedText: recognizedText.text,
+      ingredients: ingredients,
+      barcodes: barcodes,
+    );
+  }
+
   Future<RecognizedText> _extractText(InputImage inputImage) async {
     final TextRecognizer recognizer = TextRecognizer(
       script: TextRecognitionScript.latin,
