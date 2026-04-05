@@ -28,8 +28,12 @@ class RecipeDetailScreen extends StatefulWidget {
 class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   late final RecipeViewModel _viewModel;
   late final bool _ownsViewModel;
+  late final RecipeApiClient _translationClient;
   late final Set<String> _normalizedPantryIngredients;
   late final Set<String> _pantryTokens;
+  int? _translatedRecipeId;
+  bool _isTranslatingIngredients = false;
+  Map<String, String> _translatedIngredients = <String, String>{};
 
   @override
   void initState() {
@@ -51,6 +55,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             appKey: ApiConfig.edamamAppKey,
           ),
         );
+    _translationClient = RecipeApiClient();
     _viewModel.fetchRecipeDetail(widget.recipeId);
   }
 
@@ -87,6 +92,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               child: Text('Không tìm thấy thông tin món ăn.'),
             );
           }
+
+          _ensureIngredientTranslations(recipe);
 
           final String detailImageUrl = recipe.imageUrl.isNotEmpty
               ? recipe.imageUrl
@@ -197,9 +204,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                                           bottom: 8,
                                         ),
                                         child: _IngredientRow(
-                                          text: ingredient.original.isNotEmpty
-                                              ? ingredient.original
-                                              : ingredient.name,
+                                          text: _translatedIngredientText(
+                                            ingredient,
+                                          ),
                                           isAvailable: _isIngredientAvailable(
                                             ingredient,
                                           ),
@@ -209,6 +216,20 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                                     .toList(),
                               ),
                       ),
+                      if (_isTranslatingIngredients) ...<Widget>[
+                        const SizedBox(height: 8),
+                        const Row(
+                          children: <Widget>[
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Đang dịch nguyên liệu sang tiếng Việt...'),
+                          ],
+                        ),
+                      ],
                       if (_missingIngredientNames(recipe).isNotEmpty) ...<Widget>[
                         const SizedBox(height: 12),
                         FilledButton.tonalIcon(
@@ -264,9 +285,13 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   bool _isIngredientAvailable(RecipeIngredient ingredient) {
     final String ingredientName = _normalizeText(ingredient.name);
     final String ingredientOriginal = _normalizeText(ingredient.original);
+    final String ingredientTranslated = _normalizeText(
+      _translatedIngredientText(ingredient),
+    );
     final Set<String> ingredientTokens = <String>{
       ..._extractTokens(ingredient.name),
       ..._extractTokens(ingredient.original),
+      ..._extractTokens(_translatedIngredientText(ingredient)),
     };
 
     for (final String pantryItem in _normalizedPantryIngredients) {
@@ -279,6 +304,10 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       }
       if (ingredientOriginal.contains(pantryItem) ||
           pantryItem.contains(ingredientOriginal)) {
+        return true;
+      }
+      if (ingredientTranslated.contains(pantryItem) ||
+          pantryItem.contains(ingredientTranslated)) {
         return true;
       }
     }
@@ -345,11 +374,90 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   }
 
   String _normalizeText(String value) {
-    return value
+    final String normalized = _stripVietnameseAccents(value.toLowerCase());
+    return normalized
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  String _stripVietnameseAccents(String input) {
+    const Map<String, String> replacements = <String, String>{
+      'à': 'a',
+      'á': 'a',
+      'ạ': 'a',
+      'ả': 'a',
+      'ã': 'a',
+      'â': 'a',
+      'ầ': 'a',
+      'ấ': 'a',
+      'ậ': 'a',
+      'ẩ': 'a',
+      'ẫ': 'a',
+      'ă': 'a',
+      'ằ': 'a',
+      'ắ': 'a',
+      'ặ': 'a',
+      'ẳ': 'a',
+      'ẵ': 'a',
+      'è': 'e',
+      'é': 'e',
+      'ẹ': 'e',
+      'ẻ': 'e',
+      'ẽ': 'e',
+      'ê': 'e',
+      'ề': 'e',
+      'ế': 'e',
+      'ệ': 'e',
+      'ể': 'e',
+      'ễ': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'ị': 'i',
+      'ỉ': 'i',
+      'ĩ': 'i',
+      'ò': 'o',
+      'ó': 'o',
+      'ọ': 'o',
+      'ỏ': 'o',
+      'õ': 'o',
+      'ô': 'o',
+      'ồ': 'o',
+      'ố': 'o',
+      'ộ': 'o',
+      'ổ': 'o',
+      'ỗ': 'o',
+      'ơ': 'o',
+      'ờ': 'o',
+      'ớ': 'o',
+      'ợ': 'o',
+      'ở': 'o',
+      'ỡ': 'o',
+      'ù': 'u',
+      'ú': 'u',
+      'ụ': 'u',
+      'ủ': 'u',
+      'ũ': 'u',
+      'ư': 'u',
+      'ừ': 'u',
+      'ứ': 'u',
+      'ự': 'u',
+      'ử': 'u',
+      'ữ': 'u',
+      'ỳ': 'y',
+      'ý': 'y',
+      'ỵ': 'y',
+      'ỷ': 'y',
+      'ỹ': 'y',
+      'đ': 'd',
+    };
+
+    final StringBuffer output = StringBuffer();
+    for (final String char in input.split('')) {
+      output.write(replacements[char] ?? char);
+    }
+    return output.toString();
   }
 
   Set<String> _extractTokens(String input) {
@@ -405,6 +513,70 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         ),
       );
     }
+  }
+
+  void _ensureIngredientTranslations(Recipe recipe) {
+    if (_translatedRecipeId == recipe.id) {
+      return;
+    }
+    if (_isTranslatingIngredients) {
+      return;
+    }
+
+    _translatedRecipeId = recipe.id;
+    _translatedIngredients = <String, String>{};
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _translateRecipeIngredients(recipe);
+    });
+  }
+
+  Future<void> _translateRecipeIngredients(Recipe recipe) async {
+    if (!mounted) {
+      return;
+    }
+
+    final List<String> ingredientTexts = recipe.ingredients
+        .map((RecipeIngredient ingredient) {
+          final String source = ingredient.original.trim().isNotEmpty
+              ? ingredient.original.trim()
+              : ingredient.name.trim();
+          return source;
+        })
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (ingredientTexts.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isTranslatingIngredients = true;
+    });
+
+    final int requestRecipeId = recipe.id;
+    final Map<String, String> translated =
+        await _translationClient.translateToVietnamese(ingredientTexts);
+
+    if (!mounted || _translatedRecipeId != requestRecipeId) {
+      return;
+    }
+
+    setState(() {
+      _translatedIngredients = translated;
+      _isTranslatingIngredients = false;
+    });
+  }
+
+  String _translatedIngredientText(RecipeIngredient ingredient) {
+    final String source = ingredient.original.trim().isNotEmpty
+        ? ingredient.original.trim()
+        : ingredient.name.trim();
+    if (source.isEmpty) {
+      return source;
+    }
+    return _translatedIngredients[source] ?? source;
   }
 }
 

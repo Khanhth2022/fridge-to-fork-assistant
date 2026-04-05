@@ -24,6 +24,7 @@ class RecipeApiClient {
            : ApiConfig.edamamAccountUser;
 
   static const String _baseHost = 'api.edamam.com';
+  static const String _translateHost = 'translate.googleapis.com';
   static const Duration _requestTimeout = Duration(seconds: 15);
 
   final http.Client _httpClient;
@@ -261,6 +262,124 @@ class RecipeApiClient {
     );
     _recipeCache[recipeId] = recipe;
     return recipe;
+  }
+
+  Future<Map<String, String>> translateToVietnamese(
+    List<String> texts,
+  ) async {
+    return _translateTexts(texts, sourceLanguage: 'en', targetLanguage: 'vi');
+  }
+
+  Future<Map<String, String>> translateToEnglish(List<String> texts) async {
+    return _translateTexts(
+      texts,
+      sourceLanguage: 'auto',
+      targetLanguage: 'en',
+    );
+  }
+
+  Future<Map<String, String>> _translateTexts(
+    List<String> texts, {
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    final List<String> source = texts
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toList();
+
+    if (source.isEmpty) {
+      return <String, String>{};
+    }
+
+    final Map<String, String> translated = <String, String>{};
+    const int chunkSize = 8;
+
+    for (int index = 0; index < source.length; index += chunkSize) {
+      final int end = (index + chunkSize < source.length)
+          ? index + chunkSize
+          : source.length;
+      final List<String> chunk = source.sublist(index, end);
+      final List<String> chunkTranslated = await _translateChunk(
+        chunk,
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage,
+      );
+
+      for (int i = 0; i < chunk.length; i++) {
+        final String original = chunk[i];
+        final String value = (i < chunkTranslated.length)
+            ? chunkTranslated[i].trim()
+            : '';
+        translated[original] = value.isEmpty ? original : value;
+      }
+    }
+
+    return translated;
+  }
+
+  Future<List<String>> _translateChunk(
+    List<String> chunk, {
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    if (chunk.isEmpty) {
+      return const <String>[];
+    }
+
+    final String separator = ' ||| ';
+    final String queryText = chunk.join(separator);
+    final Uri uri = Uri.https(
+      _translateHost,
+      '/translate_a/single',
+      <String, String>{
+        'client': 'gtx',
+        'sl': sourceLanguage,
+        'tl': targetLanguage,
+        'dt': 't',
+        'q': queryText,
+      },
+    );
+
+    try {
+      final http.Response response = await _httpClient
+          .get(uri)
+          .timeout(_requestTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return chunk;
+      }
+
+      final dynamic decoded = jsonDecode(response.body);
+      final List<dynamic>? segments =
+          decoded is List<dynamic> && decoded.isNotEmpty
+          ? decoded.first as List<dynamic>?
+          : null;
+      if (segments == null) {
+        return chunk;
+      }
+
+      final StringBuffer merged = StringBuffer();
+      for (final dynamic segment in segments) {
+        if (segment is List<dynamic> &&
+            segment.isNotEmpty &&
+            segment.first is String) {
+          merged.write(segment.first as String);
+        }
+      }
+
+      final List<String> results = merged
+          .toString()
+          .split(separator)
+          .map((String value) => value.trim())
+          .toList();
+
+      if (results.length != chunk.length) {
+        return chunk;
+      }
+      return results;
+    } catch (_) {
+      return chunk;
+    }
   }
 
   Future<Map<String, dynamic>> _getJson(Uri uri) async {

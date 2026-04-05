@@ -152,6 +152,7 @@ class RecipeViewModel extends ChangeNotifier {
   bool _hasMoreRecipes = true;
   int _nextFetchOffset = 0;
   final Map<int, int> _priorityRecipeOrder = <int, int>{};
+  final Map<String, String> _englishAliasByNormalized = <String, String>{};
 
   Future<void> loadInitialSuggestions({bool? usePantryFallbackStrategy}) async {
     await fetchRecipes(usePantryFallbackStrategy: usePantryFallbackStrategy);
@@ -172,7 +173,9 @@ class RecipeViewModel extends ChangeNotifier {
               ? _currentQueryIngredients
               : _activePantryIngredients),
     );
-    final String ingredientKey = _buildIngredientKey(ingredients);
+    await _syncEnglishAliases(ingredients);
+    final List<String> apiIngredients = _toApiIngredients(ingredients);
+    final String ingredientKey = _buildIngredientKey(apiIngredients);
 
     if (!forceRefresh &&
         ingredientKey == _lastFetchedIngredientKey &&
@@ -189,7 +192,7 @@ class RecipeViewModel extends ChangeNotifier {
 
     try {
       await _fetchNextPage(
-        ingredients,
+        apiIngredients,
         usePantryFallbackStrategy: _usePantryFallbackStrategy,
       );
     } catch (error) {
@@ -741,9 +744,20 @@ class RecipeViewModel extends ChangeNotifier {
 
   bool _isInPantry(String ingredient, Set<String> normalizedPantry) {
     final String normalizedIngredient = _normalizeIngredient(ingredient);
+    final String englishIngredient = _englishAliasByNormalized[normalizedIngredient] ??
+        normalizedIngredient;
     for (final String pantryItem in normalizedPantry) {
+      final String englishPantryItem =
+          _englishAliasByNormalized[pantryItem] ?? pantryItem;
+
       if (normalizedIngredient.contains(pantryItem) ||
-          pantryItem.contains(normalizedIngredient)) {
+          pantryItem.contains(normalizedIngredient) ||
+          normalizedIngredient.contains(englishPantryItem) ||
+          englishPantryItem.contains(normalizedIngredient) ||
+          englishIngredient.contains(pantryItem) ||
+          pantryItem.contains(englishIngredient) ||
+          englishIngredient.contains(englishPantryItem) ||
+          englishPantryItem.contains(englishIngredient)) {
         return true;
       }
     }
@@ -820,8 +834,8 @@ class RecipeViewModel extends ChangeNotifier {
 
     final RecipeSuggestionPage page = await _apiClient.getRecipeSuggestionsPage(
       pantryIngredients: ingredients,
-      mainIngredients: _mainPantryIngredients,
-      subIngredients: _subPantryIngredients,
+      mainIngredients: _toApiIngredients(_mainPantryIngredients),
+      subIngredients: _toApiIngredients(_subPantryIngredients),
       cuisine: _selectedCuisine,
       mealType: _selectedMealType,
       dishType: _selectedDishType,
@@ -887,16 +901,20 @@ class RecipeViewModel extends ChangeNotifier {
     final List<String> pantryContext = _referencePantryIngredients.isNotEmpty
         ? _referencePantryIngredients
         : _activePantryIngredients;
+    final List<String> apiPantryContext = _toApiIngredients(pantryContext);
 
     for (final String ingredient in optional) {
-      if (ingredient.trim().isEmpty) {
+      final String queryIngredient = _toApiIngredients(<String>[ingredient])
+          .firstOrNull ??
+          ingredient;
+      if (queryIngredient.trim().isEmpty) {
         continue;
       }
 
       final RecipeSuggestionPage page = await _apiClient
           .searchRecipesByKeywordPage(
-            keyword: ingredient,
-            pantryIngredients: pantryContext,
+            keyword: queryIngredient,
+            pantryIngredients: apiPantryContext,
             from: 0,
             number: _pageSize,
           );
@@ -921,5 +939,51 @@ class RecipeViewModel extends ChangeNotifier {
       priorityRecipeIds: const <int>[],
       hasNext: false,
     );
+  }
+
+  Future<void> _syncEnglishAliases(List<String> ingredients) async {
+    final List<String> terms = _sanitizeIngredients(<String>[
+      ...ingredients,
+      ..._requiredQueryIngredients,
+      ..._optionalQueryIngredients,
+      ..._referencePantryIngredients,
+      ..._mockPantryIngredients,
+      ..._mainPantryIngredients,
+      ..._subPantryIngredients,
+    ]);
+    if (terms.isEmpty) {
+      return;
+    }
+
+    final Map<String, String> translations = await _apiClient
+        .translateToEnglish(terms);
+    for (final String term in terms) {
+      final String normalized = _normalizeIngredient(term);
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final String translated = _normalizeIngredient(
+        translations[term] ?? term,
+      );
+      _englishAliasByNormalized[normalized] =
+          translated.isEmpty ? normalized : translated;
+    }
+  }
+
+  List<String> _toApiIngredients(List<String> ingredients) {
+    final List<String> mapped = <String>[];
+    final Set<String> seen = <String>{};
+    for (final String ingredient in ingredients) {
+      final String normalized = _normalizeIngredient(ingredient);
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final String english =
+          _englishAliasByNormalized[normalized] ?? normalized;
+      if (seen.add(english)) {
+        mapped.add(english);
+      }
+    }
+    return mapped;
   }
 }
