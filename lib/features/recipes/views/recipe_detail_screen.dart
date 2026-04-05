@@ -346,18 +346,12 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       return;
     }
 
-    int addedCount = 0;
-    for (final String ingredient in missingItems) {
-      final bool added = await plannerViewModel.addCustomShoppingItem(
-        plannerViewModel.selectedDate,
-        name: ingredient,
-        quantity: 1,
-        unit: '',
-      );
-      if (added) {
-        addedCount++;
-      }
-    }
+    final bool added = await plannerViewModel
+        .addRecipeMissingIngredientsToShopping(
+          plannerViewModel.selectedDate,
+          recipe,
+          missingItems,
+        );
 
     if (!mounted) {
       return;
@@ -365,9 +359,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
     showTopRightNotification(
       context,
-      addedCount == 0
-          ? 'Các nguyên liệu thiếu đã có trong danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.'
-          : 'Đã thêm $addedCount nguyên liệu thiếu vào danh sách mua sắm của ${plannerViewModel.selectedDayLabel}.',
+      added
+          ? 'Đã thêm nguyên liệu thiếu vào danh sách mua sắm.'
+          : 'Không thể thêm nguyên liệu vào danh sách.',
     );
   }
 

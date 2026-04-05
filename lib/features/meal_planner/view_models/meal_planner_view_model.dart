@@ -382,6 +382,31 @@ class MealPlannerViewModel extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> addRecipeMissingIngredientsToShopping(
+    DateTime date,
+    Recipe recipe,
+    List<String> missingIngredients,
+  ) async {
+    if (missingIngredients.isEmpty) {
+      return false;
+    }
+
+    final DateTime normalizedDate = _normalizeDate(date);
+    final List<ShoppingIngredientSnapshot> snapshots =
+        _buildShoppingIngredientSnapshots(recipe, missingIngredients);
+    if (snapshots.isEmpty) {
+      return false;
+    }
+
+    await _addShoppingItemsForRecipe(
+      normalizedDate,
+      recipe.id.toString(),
+      snapshots,
+    );
+    notifyListeners();
+    return true;
+  }
+
   void _attachPantryListener() {
     _pantryBox = Hive.box<PantryItemModel>(PantryRepository.boxName);
     _pantryListenable = _pantryBox.listenable();
