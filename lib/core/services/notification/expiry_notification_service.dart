@@ -31,8 +31,8 @@ class ExpiryNotificationService {
 
     await NotificationService().showNotification(
       id: _buildNotificationId(today),
-      title: 'Canh bao han su dung',
-      body: '$summary sap het han trong $thresholdDays ngay toi.',
+      title: 'Cảnh báo hạn sử dụng',
+      body: '$summary sắp hết hạn trong $thresholdDays ngày tới.',
       payload: 'route:pantry',
     );
 

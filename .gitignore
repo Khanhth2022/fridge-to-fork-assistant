@@ -79,3 +79,4 @@ lib/main.reflection.dart
 amplify_outputs/
 dart_define_env/
 
+feature_locations.md
