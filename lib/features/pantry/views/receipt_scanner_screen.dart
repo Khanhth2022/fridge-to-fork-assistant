@@ -72,6 +72,13 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
             ),
             const SizedBox(height: 8),
             CustomButton(
+              label: _isScanning ? 'Đang quét...' : 'Lấy ảnh từ thư viện',
+              icon: Icons.photo_library_outlined,
+              type: CustomButtonType.secondary,
+              onPressed: _isScanning ? null : _scanReceiptFromGallery,
+            ),
+            const SizedBox(height: 8),
+            CustomButton(
               label: 'Đẩy nguyên liệu vào kho',
               icon: Icons.inventory_2_outlined,
               type: CustomButtonType.secondary,
@@ -99,6 +106,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
             const SizedBox(height: 8),
             Text(
               'Bước 1: Chụp ảnh hóa đơn\n'
+              'hoặc chọn ảnh từ thư viện\n'
               'Bước 2: Trích xuất text và barcode\n'
               'Bước 3: Chọn đẩy dữ liệu sang module Kho',
               style: Theme.of(context).textTheme.bodyMedium,
@@ -209,6 +217,23 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
   }
 
   Future<void> _scanReceipt() async {
+    await _scanReceiptWith(
+      action: (ScannerService scanner) => scanner.scanReceiptFromCamera(),
+      failedPrefix: 'Không thể quét hóa đơn từ camera',
+    );
+  }
+
+  Future<void> _scanReceiptFromGallery() async {
+    await _scanReceiptWith(
+      action: (ScannerService scanner) => scanner.scanReceiptFromGallery(),
+      failedPrefix: 'Không thể quét hóa đơn từ thư viện',
+    );
+  }
+
+  Future<void> _scanReceiptWith({
+    required Future<ScannerResult?> Function(ScannerService scanner) action,
+    required String failedPrefix,
+  }) async {
     setState(() {
       _isScanning = true;
       _error = null;
@@ -216,7 +241,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
 
     try {
       final ScannerService scanner = context.read<ScannerService>();
-      final ScannerResult? result = await scanner.scanReceiptFromCamera();
+      final ScannerResult? result = await action(scanner);
 
       if (!mounted) {
         return;
@@ -230,7 +255,7 @@ class _ReceiptScannerScreenState extends State<ReceiptScannerScreen> {
         return;
       }
       setState(() {
-        _error = 'Không thể quét hóa đơn: $e';
+        _error = '$failedPrefix: $e';
       });
     } finally {
       if (mounted) {

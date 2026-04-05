@@ -5,7 +5,7 @@ import '../../../core/services/sync/sync_service.dart';
 import '../../pantry/view_models/pantry_view_model.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -54,12 +54,15 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _runSyncAction({
-    required BuildContext context,
     required Future<void> Function() action,
     required String successMessage,
   }) async {
     bool isDialogOpen = false;
     try {
+      if (!mounted) {
+        return;
+      }
+
       isDialogOpen = true;
       showDialog<void>(
         context: context,
@@ -69,17 +72,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await action();
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(successMessage)));
+      if (!mounted) {
+        return;
       }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(successMessage)));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (!mounted) {
+        return;
       }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (isDialogOpen && mounted) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -87,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _restoreAfterLogin(BuildContext context) async {
+  Future<void> _restoreAfterLogin() async {
     final SyncService syncService = context.read<SyncService>();
     RestoreConflictResolution? resolution;
 
@@ -105,7 +110,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       await _runSyncAction(
-        context: context,
         action: () async {
           await syncService.restoreFromCloud(
             conflictResolution:
@@ -120,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
             await syncService.backupShoppingListsNow();
           }
 
-          final pantryViewModel = _tryReadPantryViewModel(context);
+          final pantryViewModel = _tryReadPantryViewModel();
           if (pantryViewModel != null) {
             await pantryViewModel.loadItems();
           }
@@ -136,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  PantryViewModel? _tryReadPantryViewModel(BuildContext context) {
+  PantryViewModel? _tryReadPantryViewModel() {
     try {
       return Provider.of<PantryViewModel>(context, listen: false);
     } catch (_) {
@@ -301,13 +305,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                       _confirmPasswordController.text,
                                 );
 
-                          if (success && mounted) {
-                            await _restoreAfterLogin(context);
-                            if (!mounted) {
-                              return;
-                            }
-                            Navigator.of(context).pop(); // Return to pantry
+                          if (!mounted || !success) {
+                            return;
                           }
+
+                          await _restoreAfterLogin();
+                          if (!mounted) {
+                            return;
+                          }
+                          Navigator.of(this.context).pop(); // Return to pantry
                         },
                   icon: authViewModel.isLoading
                       ? const SizedBox(
@@ -353,13 +359,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         : () async {
                             final success = await authViewModel
                                 .loginWithGoogle();
-                            if (success && mounted) {
-                              await _restoreAfterLogin(context);
-                              if (!mounted) {
-                                return;
-                              }
-                              Navigator.of(context).pop();
+                            if (!mounted || !success) {
+                              return;
                             }
+
+                            await _restoreAfterLogin();
+                            if (!mounted) {
+                              return;
+                            }
+                            Navigator.of(this.context).pop();
                           },
                     icon: const Icon(Icons.g_mobiledata),
                     label: const Text('Đăng nhập với Google'),
