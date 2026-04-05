@@ -32,7 +32,6 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   late final ValueListenable<Box<PantryItemModel>> _pantryListenable;
   bool _followPantry = true;
   String _lastPantryKey = '';
-  bool _hasPantrySyncedOnce = false;
   List<String> _pantryIngredients = <String>[];
   Set<String> _selectedIngredientKeys = <String>{};
 
@@ -80,10 +79,9 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
           ..sort();
 
     final String pantryKey = _buildIngredientKey(pantryNames);
-    if (_hasPantrySyncedOnce && pantryKey == _lastPantryKey) {
+    if (pantryKey == _lastPantryKey) {
       return;
     }
-    _hasPantrySyncedOnce = true;
     _lastPantryKey = pantryKey;
 
     _viewModel.updateReferencePantryIngredients(pantryNames);
@@ -125,13 +123,21 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   }
 
   void _applySelectionAndFetch({bool forceFetch = false}) {
-    _selectedIngredientKeys = <String>{};
-    _viewModel.updateRequiredQueryIngredients(const <String>[]);
-    _viewModel.updateOptionalQueryIngredients(const <String>[]);
+    final bool hasSelection = _selectedIngredientKeys.isNotEmpty;
+    final List<String> selected = _pantryIngredients
+        .where(
+          (String name) =>
+              _selectedIngredientKeys.contains(_normalizeIngredient(name)),
+        )
+        .toList();
+
+    _viewModel.updateRequiredQueryIngredients(hasSelection ? selected : []);
+    _viewModel.updateOptionalQueryIngredients(
+      hasSelection ? [] : _pantryIngredients,
+    );
     _viewModel.fetchRecipes(
-      pantryIngredients: const <String>[],
+      pantryIngredients: hasSelection ? selected : _pantryIngredients,
       forceRefresh: forceFetch,
-      usePantryFallbackStrategy: false,
     );
   }
 
@@ -154,18 +160,6 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
     return value.toLowerCase().trim();
   }
 
-  void _requestLoadMoreIfNeeded(int index) {
-    if (!_viewModel.hasMoreRecipes || _viewModel.isLoadingMore) {
-      return;
-    }
-
-    if (index >= _viewModel.recipes.length - 4) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _viewModel.loadMoreRecipes();
-      });
-    }
-  }
-
   @override
   void dispose() {
     _pantryListenable.removeListener(_handlePantryBoxChanged);
@@ -176,7 +170,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
   @override
   Widget build(BuildContext context) {
     final String title = widget.isPantrySuggestionWindow
-        ? 'Bạn muốn nấu món gì?'
+        ? 'Bạn nấu được gì với các nguyên liệu sẵn có ?'
         : 'Gợi ý món ăn';
 
     return Scaffold(
@@ -240,8 +234,7 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
       onRefresh: () => _viewModel.fetchRecipes(forceRefresh: true),
       child: GridView.builder(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
-        itemCount:
-            _viewModel.recipes.length + (_viewModel.hasMoreRecipes ? 1 : 0),
+        itemCount: _viewModel.recipes.length,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           mainAxisSpacing: 10,
@@ -249,18 +242,6 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
           mainAxisExtent: widget.isPantrySuggestionWindow ? 324 : 304,
         ),
         itemBuilder: (BuildContext context, int index) {
-          if (index >= _viewModel.recipes.length) {
-            if (_viewModel.isLoadingMore) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _viewModel.loadMoreRecipes();
-            });
-            return const SizedBox.shrink();
-          }
-
-          _requestLoadMoreIfNeeded(index);
-
           final Recipe recipe = _viewModel.recipes[index];
           final PantryMatchResult pantryMatch = _viewModel
               .getPantryMatchForRecipe(recipe);
@@ -416,14 +397,10 @@ class _PantryIngredientsBar extends StatelessWidget {
                 .map(
                   (String ingredient) => FilterChip(
                     label: Text(ingredient),
-                    selected: isPantrySuggestionWindow
-                        ? false
-                        : selectedIngredientKeys.contains(
-                            _normalizeIngredient(ingredient),
-                          ),
-                    onSelected: isPantrySuggestionWindow
-                        ? null
-                        : (_) => onToggleIngredient(ingredient),
+                    selected: selectedIngredientKeys.contains(
+                      _normalizeIngredient(ingredient),
+                    ),
+                    onSelected: (_) => onToggleIngredient(ingredient),
                     visualDensity: VisualDensity.compact,
                   ),
                 )
@@ -606,6 +583,10 @@ class _RecipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool fullMatch = pantryMatch.isFullMatch;
+    final int total = pantryMatch.totalIngredientCount;
+    final int used = pantryMatch.availableIngredientCount;
+    final int missing = pantryMatch.missingIngredientCount;
     final List<String> missingIngredients = pantryMatch.missingIngredients;
 
     return LongPressDraggable<RecipeDragPayload>(
@@ -617,19 +598,44 @@ class _RecipeCard extends StatelessWidget {
         color: Colors.transparent,
         child: SizedBox(
           width: 320,
-          child: _buildRecipeCardBody(context, missingIngredients),
+          child: _buildRecipeCardBody(
+            context,
+            fullMatch,
+            total,
+            used,
+            missing,
+            missingIngredients,
+          ),
         ),
       ),
       childWhenDragging: Opacity(
         opacity: 0.45,
-        child: _buildRecipeCardBody(context, missingIngredients),
+        child: _buildRecipeCardBody(
+          context,
+          fullMatch,
+          total,
+          used,
+          missing,
+          missingIngredients,
+        ),
       ),
-      child: _buildRecipeCardBody(context, missingIngredients),
+      child: _buildRecipeCardBody(
+        context,
+        fullMatch,
+        total,
+        used,
+        missing,
+        missingIngredients,
+      ),
     );
   }
 
   Widget _buildRecipeCardBody(
     BuildContext context,
+    bool fullMatch,
+    int total,
+    int used,
+    int missing,
     List<String> missingIngredients,
   ) {
     return Card(
@@ -696,6 +702,41 @@ class _RecipeCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: fullMatch
+                          ? Colors.green.shade50
+                          : Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: fullMatch
+                            ? Colors.green.shade300
+                            : Colors.orange.shade300,
+                      ),
+                    ),
+                    child: Text(
+                      fullMatch
+                          ? 'Đủ nguyên liệu: Bạn có $used/$total nguyên liệu cho món này.'
+                          : missingIngredients.isNotEmpty
+                          ? 'Gần đủ: Bạn có $used/$total nguyên liệu, chỉ cần mua thêm ${missingIngredients.take(2).join(', ')}${missingIngredients.length > 2 ? '...' : ''}.'
+                          : 'Gần đủ: Bạn có $used/$total nguyên liệu, cần mua thêm $missing nguyên liệu.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: fullMatch
+                            ? Colors.green.shade800
+                            : Colors.orange.shade900,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 4),
                   LayoutBuilder(

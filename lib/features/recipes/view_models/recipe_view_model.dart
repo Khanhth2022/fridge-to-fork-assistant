@@ -146,20 +146,12 @@ class RecipeViewModel extends ChangeNotifier {
     'sandwiches',
   ];
 
+  static const int _nearEnoughThreshold = 2;
   static const int _pageSize = 12;
-  static const List<String> _defaultDiscoveryKeywords = <String>[
-    'chicken',
-    'rice',
-    'beef',
-    'pasta',
-    'salad',
-  ];
 
   bool _isLoadingMore = false;
   bool _hasMoreRecipes = true;
   int _nextFetchOffset = 0;
-  int _unconstrainedKeywordIndex = 0;
-  int _unconstrainedKeywordOffset = 0;
   final Map<int, int> _priorityRecipeOrder = <int, int>{};
 
   Future<void> loadInitialSuggestions({bool? usePantryFallbackStrategy}) async {
@@ -222,6 +214,11 @@ class RecipeViewModel extends ChangeNotifier {
           ? _currentQueryIngredients
           : _activePantryIngredients,
     );
+    if (ingredients.isEmpty) {
+      _hasMoreRecipes = false;
+      notifyListeners();
+      return;
+    }
 
     final String ingredientKey = _buildIngredientKey(ingredients);
     if (ingredientKey != _lastFetchedIngredientKey) {
@@ -466,6 +463,10 @@ class RecipeViewModel extends ChangeNotifier {
           normalizedValue.contains(normalizedSelected) ||
           normalizedSelected.contains(normalizedValue);
     });
+  }
+
+  bool _isCookableOrNearEnough(Recipe recipe) {
+    return recipe.totalIngredientCount > 0;
   }
 
   int _sortByPantryUsefulness(Recipe a, Recipe b) {
@@ -788,8 +789,6 @@ class RecipeViewModel extends ChangeNotifier {
     _allFetchedRecipes = <Recipe>[];
     _recipes = <Recipe>[];
     _nextFetchOffset = 0;
-    _unconstrainedKeywordIndex = 0;
-    _unconstrainedKeywordOffset = 0;
     _hasMoreRecipes = true;
     _isLoadingMore = false;
     _priorityRecipeOrder.clear();
@@ -799,32 +798,6 @@ class RecipeViewModel extends ChangeNotifier {
     List<String> ingredients, {
     required bool usePantryFallbackStrategy,
   }) async {
-    if (ingredients.isEmpty) {
-      final RecipeSuggestionPage page = await _fetchUnconstrainedRecipesPage();
-      _currentQueryIngredients = const <String>[];
-
-      final List<Recipe> fetched = page.recipes;
-      if (fetched.isEmpty) {
-        _hasMoreRecipes = false;
-        _lastFetchedIngredientKey = '';
-        _applyFiltersAndSort();
-        return;
-      }
-
-      final Set<int> existingIds = _allFetchedRecipes
-          .map((Recipe recipe) => recipe.id)
-          .toSet();
-      final List<Recipe> uniqueFetched = fetched
-          .where((Recipe recipe) => !existingIds.contains(recipe.id))
-          .toList();
-
-      _allFetchedRecipes.addAll(uniqueFetched);
-      _lastFetchedIngredientKey = '';
-      _hasMoreRecipes = page.hasNext;
-      _applyFiltersAndSort();
-      return;
-    }
-
     if (_requiredQueryIngredients.isEmpty &&
         _optionalQueryIngredients.isNotEmpty &&
         !usePantryFallbackStrategy) {
@@ -952,47 +925,6 @@ class RecipeViewModel extends ChangeNotifier {
       queryIngredients: optional,
       priorityRecipeIds: const <int>[],
       hasNext: false,
-    );
-  }
-
-  Future<RecipeSuggestionPage> _fetchUnconstrainedRecipesPage() async {
-    final List<Recipe> merged = <Recipe>[];
-    final Set<int> seen = <int>{};
-
-    while (merged.length < _pageSize &&
-        _unconstrainedKeywordIndex < _defaultDiscoveryKeywords.length) {
-      final String keyword =
-          _defaultDiscoveryKeywords[_unconstrainedKeywordIndex];
-      final RecipeSuggestionPage page = await _apiClient
-          .searchRecipesByKeywordPage(
-            keyword: keyword,
-            pantryIngredients: const <String>[],
-            from: _unconstrainedKeywordOffset,
-            number: _pageSize,
-          );
-
-      for (final Recipe recipe in page.recipes) {
-        if (seen.add(recipe.id)) {
-          merged.add(recipe);
-          if (merged.length >= _pageSize) {
-            break;
-          }
-        }
-      }
-
-      if (page.hasNext) {
-        _unconstrainedKeywordOffset += _pageSize;
-      } else {
-        _unconstrainedKeywordIndex++;
-        _unconstrainedKeywordOffset = 0;
-      }
-    }
-
-    return RecipeSuggestionPage(
-      recipes: merged,
-      queryIngredients: const <String>[],
-      priorityRecipeIds: const <int>[],
-      hasNext: _unconstrainedKeywordIndex < _defaultDiscoveryKeywords.length,
     );
   }
 }

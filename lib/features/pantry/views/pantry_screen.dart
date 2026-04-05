@@ -13,85 +13,6 @@ import '../../../features/auth/views/login_screen.dart';
 import '../../../features/recipes/views/recipe_list_screen.dart';
 
 class PantryScreen extends StatelessWidget {
-  static const List<String> _massConsumeUnits = <String>['kg', 'g'];
-  static const List<String> _volumeConsumeUnits = <String>[
-    'lít',
-    'ml',
-    'muỗng cà phê',
-    'muỗng canh',
-    'muỗng',
-    'tsp',
-    'tbsp',
-    'cup',
-  ];
-  static const List<String> _countConsumeUnits = <String>[
-    'quả',
-    'hộp',
-    'gói',
-    'chai',
-    'lon',
-    'bó',
-    'củ',
-  ];
-
-  List<String> _consumeUnitsForItem(String unit) {
-    final String normalized = unit.trim().toLowerCase();
-    if (normalized == 'kg' || normalized == 'g') {
-      return _massConsumeUnits;
-    }
-    if (normalized == 'ml' ||
-        normalized == 'lít' ||
-        normalized == 'l' ||
-        normalized == 'lit' ||
-        normalized == 'liter' ||
-        normalized == 'liters' ||
-        normalized == 'muỗng cà phê' ||
-        normalized == 'muong ca phe' ||
-        normalized == 'muỗng canh' ||
-        normalized == 'muong canh' ||
-        normalized == 'muỗng' ||
-        normalized == 'muong' ||
-        normalized == 'tsp' ||
-        normalized == 'teaspoon' ||
-        normalized == 'teaspoons' ||
-        normalized == 'tbsp' ||
-        normalized == 'tablespoon' ||
-        normalized == 'tablespoons' ||
-        normalized == 'cup') {
-      return _volumeConsumeUnits;
-    }
-    if (_countConsumeUnits.contains(normalized)) {
-      return _countConsumeUnits;
-    }
-    return <String>[unit.trim()];
-  }
-
-  String _normalizeConsumeUnit(String unit) {
-    final String normalized = unit.trim().toLowerCase();
-    switch (normalized) {
-      case 'l':
-      case 'lit':
-      case 'liter':
-      case 'liters':
-        return 'lít';
-      case 'muong ca phe':
-      case 'muỗng cà phê':
-      case 'teaspoon':
-      case 'teaspoons':
-        return 'muỗng cà phê';
-      case 'muong canh':
-      case 'muỗng canh':
-      case 'tablespoon':
-      case 'tablespoons':
-        return 'muỗng canh';
-      case 'muong':
-      case 'muỗng':
-        return 'muỗng';
-      default:
-        return normalized;
-    }
-  }
-
   Future<RestoreConflictResolution?> _askConflictResolution(
     BuildContext context,
     int conflictCount,
@@ -302,119 +223,6 @@ class PantryScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showConsumeQuantityDialog(
-    BuildContext context,
-    PantryViewModel viewModel,
-    PantryItemModel item,
-    int itemIndex,
-  ) async {
-    final TextEditingController amountController = TextEditingController();
-    final List<String> unitOptions = _consumeUnitsForItem(item.unit);
-    final String initialUnit = _normalizeConsumeUnit(item.unit);
-    String selectedUnit = unitOptions.firstWhere(
-      (String unit) => unit == initialUnit,
-      orElse: () => unitOptions.first,
-    );
-
-    final bool? shouldConsume = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
-          builder: (BuildContext ctx, StateSetter setDialogState) {
-            return AlertDialog(
-              title: Text('Dùng nguyên liệu: ${item.name}'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    'Hiện có: ${item.quantity % 1 == 0 ? item.quantity.toInt() : item.quantity} ${item.unit}',
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Số lượng sử dụng',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedUnit,
-                    items: unitOptions
-                        .map(
-                          (String unit) => DropdownMenuItem<String>(
-                            value: unit,
-                            child: Text(unit),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (String? value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setDialogState(() {
-                        selectedUnit = value;
-                      });
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'Đơn vị sử dụng',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('Hủy'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  child: const Text('Xác nhận'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (shouldConsume != true) {
-      return;
-    }
-
-    final double? amount = double.tryParse(amountController.text.trim());
-    if (amount == null || amount <= 0) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Số lượng sử dụng không hợp lệ.')),
-        );
-      }
-      return;
-    }
-
-    final bool success = await viewModel.consumeItemQuantity(
-      index: itemIndex,
-      amount: amount,
-      amountUnit: selectedUnit,
-    );
-
-    if (!context.mounted) {
-      return;
-    }
-
-    if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Không thể trừ số lượng. Vui lòng kiểm tra lại.'),
-        ),
-      );
-    }
-  }
-
   Widget _buildExpiryAlert(BuildContext context, PantryViewModel viewModel) {
     final now = DateTime.now();
     final expiringItems = viewModel.items.where((item) {
@@ -448,8 +256,7 @@ class PantryScreen extends StatelessWidget {
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: expiringItems.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
+                      separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, index) {
                         final item = expiringItems[index];
                         final daysLeft = item.expiryDate
@@ -802,14 +609,7 @@ class PantryScreen extends StatelessWidget {
                                       item,
                                     );
                                     if (realIndex == -1) return;
-                                    if (value == 'amount') {
-                                      await _showConsumeQuantityDialog(
-                                        context,
-                                        viewModel,
-                                        item,
-                                        realIndex,
-                                      );
-                                    } else if (value == 'half') {
+                                    if (value == 'half') {
                                       final current =
                                           viewModel.items[realIndex];
                                       double newQty = (current.quantity / 2);
@@ -869,10 +669,6 @@ class PantryScreen extends StatelessWidget {
                                     }
                                   },
                                   itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'amount',
-                                      child: Text('Dùng số lượng...'),
-                                    ),
                                     const PopupMenuItem(
                                       value: 'half',
                                       child: Text('Dùng một nửa'),

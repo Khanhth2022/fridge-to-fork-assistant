@@ -282,9 +282,7 @@ class RecipeApiClient {
         if (decoded is List<dynamic>) {
           return <String, dynamic>{'root': decoded};
         }
-        throw const FormatException(
-            'Unexpected response format from server.',
-          );
+        throw const FormatException('Unexpected response format from server.');
       }
 
       final String message = decoded is Map<String, dynamic>

@@ -8,34 +8,17 @@ class AddItemBottomSheet extends StatefulWidget {
   final List<String> existingItemNames;
 
   const AddItemBottomSheet({
-    super.key,
+    Key? key,
     required this.onAdd,
     this.initialItem,
     this.existingItemNames = const <String>[],
-  });
+  }) : super(key: key);
 
   @override
   State<AddItemBottomSheet> createState() => _AddItemBottomSheetState();
 }
 
 class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
-  static const List<String> _defaultUnits = <String>[
-    'g',
-    'kg',
-    'ml',
-    'lít',
-    'quả',
-    'hộp',
-    'gói',
-    'chai',
-    'lon',
-    'bó',
-    'củ',
-    'muỗng',
-    'muỗng cà phê',
-    'muỗng canh',
-  ];
-
   late final TextEditingController _purchaseDateController;
   late final TextEditingController _expiryDateController;
   String? _quantityError;
@@ -50,14 +33,6 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
   late final TextEditingController _quantityController;
   late final TextEditingController _unitController;
   String? _nameError;
-
-  List<String> get _unitOptions {
-    final String existingUnit = widget.initialItem?.unit.trim() ?? '';
-    if (existingUnit.isEmpty || _defaultUnits.contains(existingUnit)) {
-      return _defaultUnits;
-    }
-    return <String>[..._defaultUnits, existingUnit];
-  }
 
   @override
   void initState() {
@@ -215,29 +190,13 @@ class _AddItemBottomSheetState extends State<AddItemBottomSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 1,
-                  child: DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    menuMaxHeight: 220,
-                    initialValue: _unitController.text.trim().isEmpty
-                        ? null
-                        : _unitController.text.trim(),
+                  child: TextField(
+                    controller: _unitController,
                     decoration: InputDecoration(
                       labelText: 'Đơn vị',
                       border: const OutlineInputBorder(),
                       errorText: _showValidationErrors ? _unitError : null,
                     ),
-                    items: _unitOptions
-                        .map(
-                          (String unit) => DropdownMenuItem<String>(
-                            value: unit,
-                            child: Text(unit),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (String? value) {
-                      _unitController.text = (value ?? '').trim();
-                      _validate();
-                    },
                   ),
                 ),
               ],

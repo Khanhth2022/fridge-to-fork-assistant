@@ -27,10 +27,10 @@ class BackgroundWorker {
   /// This should be called in main() before runApp()
   /// Enable debug mode only during development
   static Future<void> initialize({bool debugMode = false}) async {
-    await Workmanager().initialize(callbackDispatcher);
-    if (debugMode) {
-      debugPrint('BackgroundWorker debug mode enabled');
-    }
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: debugMode,
+    );
     debugPrint('BackgroundWorker initialized');
   }
 

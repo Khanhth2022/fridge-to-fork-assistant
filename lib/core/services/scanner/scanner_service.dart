@@ -10,16 +10,8 @@ class ScannerService {
   final ImagePicker _picker;
 
   Future<ScannerResult?> scanReceiptFromCamera() async {
-    return _scanReceipt(source: ImageSource.camera);
-  }
-
-  Future<ScannerResult?> scanReceiptFromGallery() async {
-    return _scanReceipt(source: ImageSource.gallery);
-  }
-
-  Future<ScannerResult?> _scanReceipt({required ImageSource source}) async {
     final XFile? photo = await _picker.pickImage(
-      source: source,
+      source: ImageSource.camera,
       imageQuality: 85,
     );
 
