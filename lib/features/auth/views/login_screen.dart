@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../view_models/auth_view_model.dart';
+import '../../../core/services/sync/sync_service.dart';
+import '../../pantry/view_models/pantry_view_model.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -15,6 +17,132 @@ class _LoginScreenState extends State<LoginScreen> {
   late TextEditingController _confirmPasswordController;
   bool _isLoginMode = true;
   bool _showPassword = false;
+
+  Future<RestoreConflictResolution?> _askConflictResolution(
+    BuildContext context,
+    int conflictCount,
+  ) async {
+    return showDialog<RestoreConflictResolution>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Phát hiện xung đột dữ liệu'),
+          content: Text(
+            'Có $conflictCount mục khác nhau giữa máy và Firebase. Bạn muốn ưu tiên nguồn nào khi khôi phục?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Hủy'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(RestoreConflictResolution.preferLocal),
+              child: const Text('Giữ dữ liệu local'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(RestoreConflictResolution.preferCloud),
+              child: const Text('Lấy dữ liệu Firebase'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _runSyncAction({
+    required BuildContext context,
+    required Future<void> Function() action,
+    required String successMessage,
+  }) async {
+    bool isDialogOpen = false;
+    try {
+      isDialogOpen = true;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      await action();
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(successMessage)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (isDialogOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
+
+  Future<void> _restoreAfterLogin(BuildContext context) async {
+    final SyncService syncService = context.read<SyncService>();
+    RestoreConflictResolution? resolution;
+
+    try {
+      final conflicts = await syncService.getRestoreConflicts();
+      if (!mounted) {
+        return;
+      }
+
+      if (conflicts.isNotEmpty) {
+        resolution = await _askConflictResolution(context, conflicts.length);
+        if (!mounted || resolution == null) {
+          return;
+        }
+      }
+
+      await _runSyncAction(
+        context: context,
+        action: () async {
+          await syncService.restoreFromCloud(
+            conflictResolution:
+                resolution ?? RestoreConflictResolution.preferLocal,
+          );
+          await syncService.restoreMealPlansFromCloud();
+          await syncService.restoreShoppingListsFromCloud();
+
+          if (resolution == RestoreConflictResolution.preferLocal) {
+            await syncService.backupNow();
+            await syncService.backupMealPlansNow();
+            await syncService.backupShoppingListsNow();
+          }
+
+          final pantryViewModel = _tryReadPantryViewModel(context);
+          if (pantryViewModel != null) {
+            await pantryViewModel.loadItems();
+          }
+        },
+        successMessage: 'Khôi phục dữ liệu từ Firebase thành công',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  PantryViewModel? _tryReadPantryViewModel(BuildContext context) {
+    try {
+      return Provider.of<PantryViewModel>(context, listen: false);
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
@@ -174,6 +302,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 );
 
                           if (success && mounted) {
+                            await _restoreAfterLogin(context);
+                            if (!mounted) {
+                              return;
+                            }
                             Navigator.of(context).pop(); // Return to pantry
                           }
                         },
@@ -219,9 +351,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: authViewModel.isLoading
                         ? null
                         : () async {
-                            final success =
-                                await authViewModel.loginWithGoogle();
+                            final success = await authViewModel
+                                .loginWithGoogle();
                             if (success && mounted) {
+                              await _restoreAfterLogin(context);
+                              if (!mounted) {
+                                return;
+                              }
                               Navigator.of(context).pop();
                             }
                           },

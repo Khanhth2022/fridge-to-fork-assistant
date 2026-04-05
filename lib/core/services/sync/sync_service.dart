@@ -72,16 +72,23 @@ class SyncService {
 
     try {
       final box = await Hive.openBox<PantryItemModel>(_pantryBoxName);
-      final localItems = box.values.toList();
+      final keys = box.keys.toList();
 
-      for (var item in localItems) {
+      for (final key in keys) {
+        final item = box.get(key);
+        if (item == null) {
+          continue;
+        }
+
+        if (item.deletedAtUtcMs != null) {
+          await _deleteCloudItem(item.itemId);
+          await box.delete(key);
+          continue;
+        }
+
         await _uploadOrUpdateItem(item);
-      }
-
-      // Mark all items as synced
-      for (int i = 0; i < localItems.length; i++) {
-        final updated = localItems[i].copyWith(isDirty: false);
-        await box.putAt(i, updated);
+        final updated = item.copyWith(isDirty: false);
+        await box.put(key, updated);
       }
 
       await _updateLastSyncTime();
@@ -183,6 +190,11 @@ class SyncService {
       }
       // If cloud is newer and local not dirty, pull will happen on restore
     }
+  }
+
+  Future<void> _deleteCloudItem(String itemId) async {
+    final ref = _getUserPantryRef();
+    await ref.doc(itemId).delete();
   }
 
   Future<List<RestoreConflictInfo>> getRestoreConflicts() async {
