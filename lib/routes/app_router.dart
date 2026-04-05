@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'route_names.dart';
-import '../core/widgets/notification_test_screen.dart';
 import '../core/services/scanner/scanner_service.dart';
 import '../features/pantry/views/pantry_screen.dart' as pantry_view;
 import '../features/pantry/views/receipt_scanner_screen.dart' as pantry_receipt;
@@ -99,11 +98,6 @@ class HomeScreen extends StatelessWidget {
               title: const Text('Danh sách mua'),
               onTap: () => context.go(RouteNames.shoppingListScreen),
             ),
-            const Divider(),
-            ListTile(
-              title: const Text('🧪 Kiểm thử thông báo'),
-              onTap: () => context.go('/test-notifications'),
-            ),
           ],
         ),
       ),
@@ -124,13 +118,6 @@ final appRouter = GoRouter(
       path: RouteNames.root,
       name: 'home',
       builder: (context, state) => const HomeScreen(),
-    ),
-
-    // Test Notifications Route (Development)
-    GoRoute(
-      path: '/test-notifications',
-      name: 'testNotifications',
-      builder: (context, state) => const NotificationTestScreen(),
     ),
 
     // Meal Planner Routes

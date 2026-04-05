@@ -4,7 +4,6 @@ import '../view_models/pantry_view_model.dart';
 import '../models/pantry_item_model.dart';
 import 'add_item_bottom_sheet.dart';
 import 'scanned_items_review_sheet.dart';
-import '../../../core/widgets/notification_test_screen.dart';
 import '../../../core/widgets/bottom_nav_bar.dart';
 import '../../../core/services/scanner/scanner_service.dart';
 import '../../../core/services/sync/sync_service.dart';
@@ -471,17 +470,6 @@ class PantryScreen extends StatelessWidget {
                   child: Text('Đăng nhập / Đăng ký'),
                 ),
               ];
-            },
-          ),
-          IconButton(
-            tooltip: 'Test notification',
-            icon: const Icon(Icons.bug_report_outlined),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const NotificationTestScreen(),
-                ),
-              );
             },
           ),
         ],
