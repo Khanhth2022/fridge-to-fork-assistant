@@ -547,10 +547,7 @@ class MealPlannerViewModel extends ChangeNotifier {
     return deductedAny;
   }
 
-  Future<void> _ensureRecipeRemoved(
-    DateTime date,
-    PlannedRecipe recipe,
-  ) async {
+  Future<void> _ensureRecipeRemoved(DateTime date, PlannedRecipe recipe) async {
     final bool removed = await removeRecipeFromDate(date, recipe.recipeId);
     if (removed) {
       return;
@@ -562,8 +559,7 @@ class MealPlannerViewModel extends ChangeNotifier {
     );
     final String normalizedTitle = _normalizeText(recipe.title);
     final int index = recipes.indexWhere(
-      (PlannedRecipe item) =>
-          _normalizeText(item.title) == normalizedTitle,
+      (PlannedRecipe item) => _normalizeText(item.title) == normalizedTitle,
     );
     if (index == -1) {
       return;
